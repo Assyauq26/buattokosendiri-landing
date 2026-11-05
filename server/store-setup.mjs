@@ -9,7 +9,7 @@ for (const [address, bits] of [
   ["192.168.0.0", 16], ["198.18.0.0", 15], ["198.51.100.0", 24], ["203.0.113.0", 24],
   ["224.0.0.0", 3],
 ]) reserved.addSubnet(address, bits);
-for (const address of ["43.173.41.24", "43.173.21.197"]) reserved.addAddress(address);
+reserved.addAddress("43.173.41.24");
 
 export function isStoreIpv4(address) {
   return typeof address === "string" && isIPv4(address) && !reserved.check(address);
