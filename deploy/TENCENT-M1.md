@@ -29,8 +29,9 @@ pilot-releases.json berisi array {repository,version,sha,approved}. Masukkan
 hanya tag semver rilis publik yang disetujui, commit penuh yang cocok, dan
 approved=true. Array kosong menutup bootstrap dan pairing dengan aman. Biarkan
 approved-releases.json lama kosong agar rollback ke versi sebelum pembatasan
-pilot tidak membuka installer. Set INSTALLER_TEST_EMAILS ke daftar alamat uji
-yang dipisahkan koma. SELLER_PILOT_ONLY=1 juga membatasi OTP dan session.
+pilot tidak membuka installer. Gunakan SELLER_PILOT_ONLY=0 untuk membuka
+registrasi dan pairing bagi semua akun dengan email terverifikasi. Mode
+SELLER_PILOT_ONLY=1 membatasi OTP, sesi, dan pairing ke INSTALLER_TEST_EMAILS.
 Uji pengiriman OTP ke kotak masuk berizin serta instalasi pada VPS disposable
 yang kosong dan domain uji berizin sebelum rilis dibuka ke seller.
 

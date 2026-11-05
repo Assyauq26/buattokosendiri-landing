@@ -22,7 +22,7 @@ export function config(env = process.env) {
   if (installerTestEmails.some((email) => !/^[^\s@,]+@[^\s@,]+\.[^\s@,]+$/.test(email)))
     throw Error("Invalid installer test account allowlist");
   const sellerPilotOnly = env.SELLER_PILOT_ONLY === "1";
-  if ((releases.length || sellerPilotOnly) && !installerTestEmails.length)
+  if (sellerPilotOnly && !installerTestEmails.length)
     throw Error("Pilot requires a test account allowlist");
   const trustedProxyIp = env.TRUST_PROXY === "1" ? env.TRUST_PROXY_IP : undefined;
   if (env.TRUST_PROXY === "1" && !isIP(trustedProxyIp || ""))
