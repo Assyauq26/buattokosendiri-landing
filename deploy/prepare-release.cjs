@@ -9,7 +9,11 @@ const repository = path.resolve(__dirname, '..');
 const rootFiles = new Set(['index.html', '404.html', 'portal-config.json']);
 const publicDirectories = ['assets/', 'daftar/', 'masuk/', 'pendaftaran/', 'kebijakan-privasi/', 'panduan-instalasi/'];
 const extensions = new Set(['.html', '.css', '.js', '.json', '.svg', '.png', '.jpg', '.jpeg', '.webp', '.woff2', '.txt', '.pdf']);
-const required = ['index.html', '404.html', 'pendaftaran/index.html', 'panduan-instalasi/index.html', 'panduan-instalasi/panduan-instalasi.pdf'];
+const required = [
+  'index.html', '404.html', 'portal-config.json', 'daftar/index.html', 'masuk/index.html',
+  'kebijakan-privasi/index.html', 'pendaftaran/index.html', 'panduan-instalasi/index.html',
+  'panduan-instalasi/panduan-instalasi.pdf', 'assets/img/hero-desktop.png', 'assets/img/hero-mobile.png'
+];
 const maxBytes = 30 * 1024 * 1024;
 
 function prepare(sha, destination, releaseMode = 'source') {
@@ -28,6 +32,7 @@ function prepare(sha, destination, releaseMode = 'source') {
     const [, mode, type, , relative] = match;
     const allowed = rootFiles.has(relative) || publicDirectories.some(dir => relative.startsWith(dir));
     if (!allowed) continue;
+    if (relative === 'assets/img/PROVENANCE.md') continue;
     if (!relative || relative.startsWith('/') ||
         relative.split('/').some(part => part === '.' || part === '..' || part.startsWith('.'))) {
       throw new Error('Unsafe tracked path');
