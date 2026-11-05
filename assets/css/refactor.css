@@ -1,0 +1,131 @@
+
+/* JetSeller V3 visual refactor — scoped to the marketing homepage.
+   Existing info pages, auth notices and Gheverhan remain unchanged. */
+body#beranda { --red:#E1251B; --red-dark:#bd1712; --ink:#131722; --muted:#5e6876; --line:#e9edf1; }
+body#beranda .site-header { background:rgba(255,255,255,.92); border-bottom:1px solid rgba(19,23,34,.035); }
+body#beranda .header-inner { min-height:76px; }
+body#beranda .brand { position:relative; letter-spacing:-.063em; font-size:1.7rem; }
+body#beranda .hero { padding:75px 0 65px; isolation:isolate; }
+body#beranda .hero::before { inset:0; width:100%; height:100%; background-image:linear-gradient(to right,rgba(49,66,80,.052) 1px,transparent 1px),linear-gradient(to bottom,rgba(49,66,80,.052) 1px,transparent 1px); background-size:36px 36px; background-position:center top; pointer-events:none; -webkit-mask-image:radial-gradient(ellipse 64% 64% at center,#000 10%,transparent 78%); mask-image:radial-gradient(ellipse 64% 64% at center,#000 10%,transparent 78%); z-index:-2; }
+body#beranda .hero::after { content:""; position:absolute; inset:0; background:radial-gradient(ellipse 48% 52% at 82% 49%,rgba(225,37,27,.095),transparent 85%); pointer-events:none; z-index:-1; }
+body#beranda .hero-grid { grid-template-columns:minmax(0,.95fr) minmax(0,1.05fr); gap:12px; min-height:570px; align-items:center; }
+body#beranda .hero-copy { position:relative; z-index:4; }
+body#beranda .hero h1 { font-size:clamp(2.35rem,4.25vw,3.62rem); max-width:590px; letter-spacing:-.052em; line-height:1.12; }
+body#beranda .lead { color:#626c79; max-width:510px; font-size:1.04rem; }
+body#beranda .pill { padding:8px 0; background:transparent; }
+body#beranda .btn { border-radius:12px; }
+body#beranda .btn-primary { background:linear-gradient(145deg,#f22626,#de0813); box-shadow:0 9px 22px rgba(225,37,27,.18); }
+body#beranda .btn-outline { border-color:#dce0e7; box-shadow:0 3px 12px rgba(19,23,34,.045); }
+body#beranda .btn-play { background:rgba(255,255,255,.94); }
+body#beranda .ticks { gap:15px; font-size:.84rem; color:#353d49; }
+body#beranda .ticks svg { width:18px; height:18px; }
+
+/* Supplied artwork retains its original composition and alpha channel. */
+body#beranda .hero-visual { position:relative; width:100%; min-width:0; min-height:0; padding:0; }
+body#beranda .hero-artwork { display:block; width:100%; }
+body#beranda .hero-artwork img { display:block; width:100%; height:auto; object-fit:contain; }
+body#beranda .pill { display:inline-flex; align-items:center; gap:12px; max-width:100%; }
+body#beranda .pill img { display:block; width:auto; height:26px; object-fit:contain; }
+body#beranda .pill span { font-size:30px; line-height:1; color:#000; }
+body#beranda .pill img,body#beranda .step-icon img { filter:brightness(0) saturate(100%) invert(22%) sepia(91%) saturate(3649%) hue-rotate(350deg) brightness(92%) contrast(94%); }
+
+/* Content blocks and the original red/white icon vocabulary. */
+body#beranda #fitur { position:relative; padding:27px 0 18px; }
+body#beranda .cards-3 { gap:15px; }
+body#beranda .card { background:linear-gradient(150deg,#fff,#fffbfb); border-color:#f1e6e6; padding:25px 25px 23px; box-shadow:0 9px 25px rgba(73,22,22,.035); }
+body#beranda .card h2 { margin:17px 0 7px; font-size:1.15rem; color:#d61d1d; }
+body#beranda .card p { font-size:.9rem; line-height:1.58; }
+body#beranda .icon-tile { background:#ffe8e9; border-radius:15px; }
+body#beranda .icon-tile svg { stroke-width:2.2; }
+body#beranda #cara-kerja { padding-top:20px; }
+body#beranda .steps-section { background:linear-gradient(#fff,#fffafa); }
+body#beranda .steps-section .eyebrow,body#beranda .steps-section .section-sub,body#beranda .steps-section .section-title { justify-content:center; text-align:center; }
+body#beranda .steps { gap:38px; }
+body#beranda .step { position:relative; flex-direction:column; align-items:center; text-align:center; justify-content:center; gap:10px; padding:30px 24px 25px; min-height:210px; box-shadow:0 8px 26px rgba(27,30,41,.025); }
+body#beranda .step-num { position:absolute; top:17px; left:19px; width:26px; height:26px; font-size:.8rem; }
+body#beranda .step-icon { flex-shrink:0; }
+body#beranda .step-icon img { display:block; width:52px; height:52px; }
+body#beranda .step-icon svg { width:52px; height:52px; stroke:var(--red); stroke-width:1.8; }
+body#beranda .step h3 { margin:0 0 6px; font-size:1.08rem; }
+body#beranda .step p { max-width:250px; font-size:.87rem; }
+body#beranda .step:not(:last-child)::after { content:"→"; position:absolute; top:43%; right:-32px; font-size:32px; color:var(--red); font-weight:600; line-height:1; }
+body#beranda .cta-banner { background:linear-gradient(120deg,#ec0b17,#c70918); border-radius:18px; box-shadow:0 12px 28px rgba(221,19,30,.13); }
+body#beranda .cta-banner::before { inset:0; width:100%; height:100%; border-radius:inherit; background-image:linear-gradient(to right,rgba(255,255,255,.16) 1px,transparent 1px),linear-gradient(to bottom,rgba(255,255,255,.16) 1px,transparent 1px); background-size:36px 36px; -webkit-mask-image:linear-gradient(to bottom,#000,transparent); mask-image:linear-gradient(to bottom,#000,transparent); transform:none; pointer-events:none; }
+body#beranda .cta-banner::after { display:none; }
+body#beranda .cta-text { position:relative; }
+body#beranda .cta-banner .btn-light { min-width:175px; position:relative; }
+body#beranda .faq { border-color:#e9ebef; }
+
+/* Tablet & mobile: prevent text collisions; keep mockup composition readable. */
+@media (max-width:1100px) {
+  body#beranda .hero-grid { grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:4px; }
+  body#beranda .hero h1 { font-size:clamp(2.1rem,4.15vw,3.05rem); }
+}
+@media (max-width:900px) {
+  body#beranda .site-header .header-inner { min-height:69px; }
+  body#beranda .hero { padding-top:48px; }
+  body#beranda .hero-grid { display:grid; grid-template-columns:minmax(0,1fr); gap:0; min-height:0; }
+  body#beranda .hero-copy { max-width:640px; margin:0 auto; text-align:center; }
+  body#beranda .lead { margin-inline:auto; }
+  body#beranda .hero-cta,body#beranda .ticks { justify-content:center; }
+  body#beranda .hero-visual { min-height:0; width:min(100%,580px); margin:35px auto 0; }
+  body#beranda .cards-3 { grid-template-columns:repeat(3,minmax(0,1fr)); gap:9px; }
+  body#beranda .card { padding:18px 15px; }
+  body#beranda .card h2 { font-size:1rem; }
+  body#beranda .card p { font-size:.79rem; }
+  body#beranda .steps { gap:16px; }
+  body#beranda .step:not(:last-child)::after { display:none; }
+}
+@media (max-width:600px) {
+  body#beranda .hero { padding-top:32px; padding-bottom:35px; }
+  body#beranda .hero-copy { text-align:left; }
+  body#beranda .hero h1 { font-size:clamp(2.05rem,7vw,2.7rem); }
+  body#beranda .lead { font-size:.97rem; }
+  body#beranda .hero-cta,body#beranda .ticks { justify-content:flex-start; }
+  body#beranda .hero-cta .btn { flex:0 1 auto; font-size:.91rem; padding:12px 17px; }
+  body#beranda .hero-visual { min-height:0; width:100%; margin:13px auto 0; }
+  body#beranda #fitur { padding-top:8px; padding-bottom:16px; }
+  body#beranda #cara-kerja { padding-top:12px; }
+  body#beranda .site-footer { text-align:center; }
+  body#beranda .footer-inner { flex-direction:column; align-items:center; justify-content:center; }
+  body#beranda .footer-nav { justify-content:center; flex-wrap:wrap; margin-inline:auto; }
+  body#beranda .pill img { height:21px; }
+  body#beranda .pill { gap:10px; }
+  body#beranda .pill span { font-size:24px; }
+  body#beranda .cards-3 { grid-template-columns:1fr; gap:10px; }
+  body#beranda .card { display:grid; grid-template-columns:51px minmax(0,1fr); gap:0 15px; align-items:center; }
+  body#beranda .card .icon-tile { grid-row:span 2; width:49px; height:49px; }
+  body#beranda .card h2 { margin:0 0 3px; }
+  body#beranda .card p { font-size:.82rem; }
+  body#beranda .steps-section .eyebrow,body#beranda .steps-section .section-sub,body#beranda .steps-section .section-title { justify-content:flex-start; text-align:left; }
+  body#beranda .step { flex-direction:row; text-align:left; justify-content:flex-start; align-items:center; padding:20px 15px 20px 54px; min-height:105px; }
+  body#beranda .step-num { top:18px; left:11px; width:23px; height:23px; }
+  body#beranda .step-icon img { width:40px; height:40px; }
+  body#beranda .step-icon svg { width:40px; height:40px; }
+  body#beranda .step p { max-width:none; }
+  body#beranda .cta-banner { padding:28px 22px; }
+  body#beranda .cta-banner .btn { width:100%; }
+}
+@media (max-width:375px) {
+  body#beranda .hero h1 { font-size:2rem; }
+  body#beranda .hero-cta .btn { padding:11px 13px; font-size:.86rem; }
+}
+@media (prefers-reduced-motion:reduce) {
+  body#beranda *,body#beranda *::before,body#beranda *::after { animation:none !important; transition:none !important; scroll-behavior:auto !important; }
+}
+
+/* The landscape original includes the whole laptop, phone and truck.
+   Extend only the artwork beyond the copy gutter; retain its intrinsic ratio. */
+@media (max-width:768px) {
+  body#beranda .hero-visual { width:calc(100vw - 8px); max-width:none; margin-inline:0; justify-self:center; }
+}
+
+body#beranda .brand{font-size:1.15rem;letter-spacing:-.025em;max-width:17ch;white-space:normal}
+@media(max-width:600px){body#beranda .brand{font-size:1rem}}
+
+body#beranda .hero-visual{animation:none}
+
+body#beranda .step-num{color:#b3121a}
+
+/* Four ordered steps retain the existing card and icon vocabulary. */
+body#beranda .steps{grid-template-columns:repeat(4,minmax(0,1fr));gap:20px}body#beranda .step{padding:44px 16px 24px;justify-content:flex-start}body#beranda .step:not(:last-child)::after{display:none}@media(max-width:1100px){body#beranda .steps{grid-template-columns:repeat(3,minmax(0,1fr))}}@media(max-width:700px){body#beranda .steps{grid-template-columns:1fr}body#beranda .step{padding:22px 20px 22px 56px}}

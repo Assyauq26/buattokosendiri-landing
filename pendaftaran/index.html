@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Pendaftaran — Buat Toko Online Sendiri</title>
+  <meta name="description" content="Isi informasi toko dan simpan pendaftaran. Panduan instalasi akan tersedia menyusul. Tanpa akun, password, atau OTP.">
+  <link rel="canonical" href="https://buattokosendiri.web.id/pendaftaran">
+  <link rel="icon" href="/assets/img/favicon.svg"><meta name="theme-color" content="#E1251B">
+  <link rel="stylesheet" href="/assets/css/registration.css">
+  <script src="/assets/js/registration.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#registration">Lewati ke formulir</a>
+  <header class="registration-header"><a class="wordmark" href="/">Buat Toko<br>Online Sendiri<span aria-hidden="true">.</span></a><a href="/">Kembali ke Beranda</a></header>
+  <main id="registration" class="registration-shell">
+    <div class="page-intro"><h1>Mulai toko milikmu sendiri.</h1><p>Isi informasi singkat untuk mencatat pendaftaran tokomu.<br>Tanpa membuat akun, password, atau OTP.</p></div>
+    <ol class="stepper" aria-label="Langkah pendaftaran">
+      <li aria-current="step"><span class="step-number">1</span><span>Isi Data</span></li>
+      <li><span class="step-number">2</span><span>Info Toko</span></li>
+      <li><span class="step-number">3</span><span>Konfirmasi</span></li>
+      <li><span class="step-number">4</span><span>Berhasil</span></li>
+    </ol>
+    <form id="registration-form" class="form-card" novalidate>
+      <div id="form-error" class="error-summary" role="alert" tabindex="-1" hidden></div>
+      <section class="form-step" data-step="1" aria-labelledby="heading-1">
+        <h2 id="heading-1" tabindex="-1">Informasi Seller</h2><p class="section-description">Lengkapi data diri untuk memulai toko online milikmu sendiri.</p>
+        <label for="fullName">Nama Lengkap <span class="required">*</span></label>
+        <input id="fullName" name="fullName" autocomplete="name" minlength="2" maxlength="100" required placeholder="Nama lengkap kamu" aria-describedby="fullName-error"><p id="fullName-error" class="field-error" hidden></p>
+        <label for="email">Alamat Email <span class="required">*</span></label>
+        <input id="email" name="email" type="email" autocomplete="email" maxlength="254" required placeholder="nama@email.com" aria-describedby="email-hint email-error"><p id="email-hint" class="hint">Untuk data kontak pendaftaran. Tidak perlu verifikasi OTP.</p><p id="email-error" class="field-error" hidden></p>
+        <label for="whatsapp">Nomor WhatsApp <span class="optional">Opsional</span></label>
+        <input id="whatsapp" name="whatsapp" type="tel" autocomplete="tel" maxlength="24" placeholder="081234567890" aria-describedby="whatsapp-error"><p id="whatsapp-error" class="field-error" hidden></p>
+        <div class="form-actions end"><button class="button primary" type="button" data-next="2">Lanjutkan <span aria-hidden="true">→</span></button></div>
+      </section>
+      <section class="form-step" data-step="2" aria-labelledby="heading-2" hidden>
+        <h2 id="heading-2" tabindex="-1">Informasi Toko</h2><p class="section-description">Ceritakan sedikit tentang toko yang ingin kamu buat.</p>
+        <label for="storeName">Nama Toko / Brand <span class="required">*</span></label>
+        <input id="storeName" name="storeName" autocomplete="organization" maxlength="100" required placeholder="Toko Ceria" aria-describedby="storeName-error"><p id="storeName-error" class="field-error" hidden></p>
+        <label for="category">Kategori Produk <span class="required">*</span></label>
+        <select id="category" name="category" required aria-describedby="category-error"><option value="">Pilih kategori produk</option><option>Fashion</option><option>Elektronik</option><option>Kecantikan</option><option>Makanan</option><option>Aksesoris</option><option>Lainnya</option></select><p id="category-error" class="field-error" hidden></p>
+        <label for="domain">Nama Domain <span class="optional">Opsional</span></label>
+        <input id="domain" name="domain" type="text" inputmode="url" autocomplete="off" maxlength="253" placeholder="tokoceria.com" aria-describedby="domain-error"><p id="domain-error" class="field-error" hidden></p>
+        <label class="checkbox"><input id="noDomain" name="noDomain" type="checkbox"><span>Saya belum mempunyai domain.</span></label>
+        <label for="city">Kota/Kabupaten <span class="optional">Opsional</span></label>
+        <input id="city" name="city" autocomplete="address-level2" maxlength="100" placeholder="Contoh: Bandung" aria-describedby="city-error"><p id="city-error" class="field-error" hidden></p>
+        <label for="description">Deskripsi Toko <span class="optional">Opsional</span></label>
+        <textarea id="description" name="description" maxlength="500" rows="3" placeholder="Produk apa yang ingin kamu jual?" aria-describedby="description-count description-error"></textarea><p id="description-count" class="hint counter">0 / 500 karakter</p><p id="description-error" class="field-error" hidden></p>
+        <div class="form-actions"><button class="button secondary" type="button" data-back="1">Kembali</button><button class="button primary" type="button" data-next="3">Lanjutkan <span aria-hidden="true">→</span></button></div>
+      </section>
+      <section class="form-step" data-step="3" aria-labelledby="heading-3" hidden>
+        <h2 id="heading-3" tabindex="-1">Tinjau Data Pendaftaran</h2><p class="section-description">Pastikan informasi berikut sudah benar.</p>
+        <div class="summary-grid"><section class="summary"><div class="summary-heading"><h3>Data Seller</h3><button type="button" class="text-button" data-back="1" aria-label="Ubah data seller">Ubah</button></div><dl id="seller-summary"></dl></section><section class="summary"><div class="summary-heading"><h3>Informasi Toko</h3><button type="button" class="text-button" data-back="2" aria-label="Ubah informasi toko">Ubah</button></div><dl id="store-summary"></dl></section></div>
+        <label class="checkbox consent"><input type="checkbox" id="consent" name="consent" required aria-describedby="consent-error"><span>Saya menyetujui <a href="/kebijakan-privasi" target="_blank" rel="noopener">Kebijakan Privasi</a> dan pemrosesan data pendaftaran untuk keperluan layanan Buat Toko Online Sendiri.</span></label><p id="consent-error" class="field-error" hidden></p>
+        <p class="hint">Pendaftaran menyimpan informasi kontak dan toko. Aplikasi belum dipasang dan tidak ada akun pusat yang dibuat.</p>
+        <div class="spam-trap" aria-hidden="true"><label for="website">Website perusahaan</label><input id="website" name="website" tabindex="-1" autocomplete="off"></div>
+        <div class="form-actions"><button class="button secondary" type="button" data-back="2">Kembali</button><button id="submit-registration" class="button primary" type="submit">Selesaikan Pendaftaran</button></div>
+      </section>
+    </form>
+    <section id="success" class="form-card success" aria-labelledby="heading-4" hidden>
+      <svg class="success-icon" viewBox="0 0 80 80" aria-hidden="true"><path d="M14 31h44v32H14zM10 31l7-17h38l7 17M25 63V43h16v20"/><path d="M10 31c0 11 13 11 13 0 0 11 13 11 13 0 0 11 13 11 13 0 0 11 13 11 13 0"/><circle cx="59" cy="56" r="16"/><path d="m51 56 6 6 10-12"/></svg>
+      <h2 id="heading-4" tabindex="-1">Pendaftaran Berhasil!</h2><p>Terima kasih telah mendaftar di Buat Toko Online Sendiri. Panduan instalasi aplikasi akan segera tersedia.</p>
+      <div class="receipt"><strong id="registered-store"></strong><span>Nomor referensi pendaftaran</span><code id="reference-code"></code><p>Data pendaftaran berhasil dicatat.</p></div>
+      <div class="success-actions"><button class="button primary" type="button" id="download-guide" disabled aria-describedby="guide-status">Download Panduan — Menyusul</button><p id="guide-status" class="hint">Panduan instalasi sedang disiapkan.</p><a class="button secondary" href="/">Kembali ke Beranda</a></div>
+    </section>
+    <noscript><p class="error-summary">Aktifkan JavaScript untuk mengisi dan mengirim formulir pendaftaran.</p></noscript>
+    <p class="form-footer">Data digunakan untuk layanan pendaftaran. <a href="/kebijakan-privasi">Baca kebijakan privasi</a>.</p>
+  </main>
+</body>
+</html>
