@@ -1,28 +1,22 @@
-# Buat Toko Online Sendiri — Landing Page
+# Buat Toko Online Sendiri — Platform Pusat M1
 
-Repository mandiri untuk website publik [buattokosendiri.web.id](https://buattokosendiri.web.id/).
-Kode halaman, CSS, JavaScript, gambar, panduan instalasi, dan PDF berada di root repository ini.
+Platform pusat untuk landing, pendaftaran seller melalui OTP, wizard instalasi,
+dan pemantauan provisioning. Jalankan satu deployment platform permanen pada
+Tencent 43.173.41.24. Hubify adalah lingkungan pengembangan aplikasi toko.
+Installer, database toko, storefront, dan dashboard tetap dikelola oleh
+repository Assyauq26/buattokoonline dan berjalan pada VPS masing-masing seller.
 
-## Halaman
+- /pendaftaran/ — registrasi atau login seller dan wizard instalasi.
+- /panduan-instalasi/ — panduan lengkap dan PDF.
+- /api/platform/ — API platform, session seller, dan protokol agent.
+- /bootstrap.sh — bootstrap HTTPS, hanya tersedia bila rilis disetujui.
 
-- `/` — landing page dan tombol panduan instalasi.
-- `/pendaftaran/` — antarmuka pendaftaran seller.
-- `/panduan-instalasi/` — panduan pemasangan toko dan tautan PDF.
-- `/daftar/` dan `/masuk/` — kompatibilitas tautan lama.
-- `/kebijakan-privasi/` — kebijakan privasi.
+Untuk pengembangan lokal gunakan Node 24+, PostgreSQL terpisah, dan npm ci.
+Jalankan npm run build. Uji integrasi membutuhkan TEST_DATABASE_URL yang
+mengarah ke database disposable bernama platform_m1_test, lalu npm test.
+Pengiriman email dalam uji lokal menggunakan adapter di memori.
 
-**Batas arsitektur:** endpoint `/api/registration` yang dipakai formulir pendaftaran bukan bagian dari repository statis ini. Reverse proxy/backend pendaftaran harus tetap tersedia saat migrasi domain. Dashboard, database, installer, dan aplikasi seller tetap di repository serta prosedur deployment masing-masing.
-
-## Pengembangan dan rilis
-
-- Tidak ada auto-deploy atau CI yang dipicu oleh `push` atau pull request.
-- GitHub Actions `Manual landing checks` hanya dapat dijalankan oleh owner melalui `workflow_dispatch` jika diminta.
-- Cek lokal opsional: `node --check deploy/prepare-release.cjs` dan `bash -n deploy/activate-static-landing.sh`.
-- Build paket rilis statis dari **SHA commit tepat**: `node deploy/prepare-release.cjs FULL_SHA_40 /tmp/btos-landing-output registration`.
-- Aktivasi di VPS hanya untuk operator berizin dengan validasi domain, backup, hash aset, dan rollback; petunjuk di [deploy/STATIC-LANDING.md](deploy/STATIC-LANDING.md).
-
-Pembuatan commit/merge pada repository ini **tidak berarti deployment ke website live**. Aktivasi memerlukan inspeksi routing Caddy dan persetujuan operator, khususnya untuk memastikan `/api/registration` tetap berfungsi. Helper aplikasi seller tidak dimodifikasi.
-
-## Asal kode
-
-Dimigrasikan dari direktori `landing/jetseller/` di `Assyauq26/Gheverhan`, snapshot commit `46e48786d07bbb70993091934658c238ba81acfd` (branch refactor deployment statis). File gambar asli dipertahankan byte-for-byte; atribusi aset tercantum dalam `assets/img/PROVENANCE.md`.
+Gunakan [runbook Tencent](deploy/TENCENT-M1.md) untuk aktivasi, backup, dan
+cutover DNS. Push dan PR tidak menjalankan CI atau deploy secara otomatis.
+Data pendaftaran lama tetap pada backend asal sampai proses ekspor/migrasi
+dan kebijakan aksesnya ditetapkan.

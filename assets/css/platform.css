@@ -1,0 +1,111 @@
+h2 {
+  letter-spacing: -0.025em;
+  font-size: 26px;
+  margin-top: 0;
+}
+h3 {
+  margin-top: 32px;
+}
+.notice {
+  padding: 18px 20px;
+  border: 1px solid #e6d9be;
+  border-radius: 12px;
+  background: #fffaf0;
+  margin: 20px 0;
+  line-height: 1.7;
+  font-size: 14px;
+}
+.notice p {
+  margin: 8px 0 0;
+}
+.instructions {
+  padding-left: 23px;
+  font-size: 14px;
+  line-height: 1.8;
+}
+.instructions li {
+  padding-left: 6px;
+  margin-bottom: 14px;
+}
+pre {
+  padding: 16px;
+  background: #f6f7f8;
+  border-radius: 10px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+code {
+  font-size: 0.9em;
+}
+#pairing button {
+  margin-top: 10px;
+}
+#edit-store {
+  display: block;
+  margin-top: 18px;
+}
+.installation-stages {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.installation-stages li {
+  padding: 13px 15px;
+  border: 1px solid #e5e7eb;
+  border-radius: 9px;
+  font-size: 13px;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+.installation-stages li[data-active="true"] {
+  background: #fff1ef;
+  border-color: #e1251b;
+  color: #9b2119;
+}
+.installation-stages small {
+  color: #626873;
+}
+.installation-stages li[data-done="true"] {
+  border-color: #afd1b6;
+  background: #f4fbf5;
+}
+#job-state {
+  font-weight: 600;
+  line-height: 1.7;
+}
+section p {
+  line-height: 1.75;
+  font-size: 14px;
+}
+.stepper li {
+  font-size: 11px;
+}
+.stepper {
+  gap: 8px;
+}
+#result {
+  display: grid;
+  grid-template-columns: 130px 1fr;
+  gap: 12px;
+}
+#result dt,
+#result dd {
+  margin: 0;
+}
+#result dd {
+  font-weight: 600;
+}
+@media (max-width: 600px) {
+  .stepper li {
+    font-size: 10px;
+    text-align: center;
+  }
+  .form-actions {
+    flex-wrap: wrap;
+  }
+  #result {
+    grid-template-columns: 100px 1fr;
+  }
+}

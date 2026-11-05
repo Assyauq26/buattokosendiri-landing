@@ -1,1 +1,84 @@
-<!doctype html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="icon" href="/assets/img/favicon.svg"><link rel="stylesheet" href="/assets/css/registration.css"><title>Kebijakan Privasi — Buat Toko Online Sendiri</title><link rel="canonical" href="https://buattokosendiri.web.id/kebijakan-privasi"></head><body><header class="registration-header"><a class="wordmark" href="/">Buat Toko<br>Online Sendiri<span>.</span></a><a href="/pendaftaran">Daftar</a></header><main class="registration-shell article"><h1>Kebijakan Privasi Pendaftaran</h1><p>Versi 2026-11-05.1 · Berlaku 5 November 2026</p><p>Buat Toko Online Sendiri menyimpan data yang kamu kirim untuk mencatat pendaftaran, memahami kebutuhan toko, dan menghubungi kamu terkait layanan yang diminta. Formulir tidak membuat akun atau menginstal toko.</p><h2>Data yang disimpan</h2><p>Nama lengkap, email, nama brand, kategori produk, serta WhatsApp, domain, kota/kabupaten, dan deskripsi bila diisi. Kami juga menyimpan nomor referensi acak, waktu pendaftaran, serta waktu dan versi persetujuan privasi.</p><h2>Keamanan dan penggunaan</h2><p>Data disimpan pada PostgreSQL platform yang terpisah dari database toko demo. Tidak ada daftar pendaftar publik. Kami tidak meminta password, OTP, API key, atau akses VPS. Tidak ada cookie akun seller atau penyimpanan formulir di localStorage. Formulir tetap berada di memori tab selama berpindah langkah; menutup atau memuat ulang tab menghapus isian yang belum dikirim.</p><p>Untuk mencegah spam, layanan memakai challenge formulir dan pembatasan permintaan. Alamat IP diproses sementara dan diubah menjadi pengenal HMAC sebelum disimpan sebagai penghitung. Penghitung disimpan paling lama 48 jam; challenge kedaluwarsa setelah 30 menit. Log layanan tidak merekam isi formulir. Server infrastruktur tetap memproses koneksi untuk melayani situs.</p><h2>Penyimpanan dan akses</h2><p>Data pendaftaran disimpan selama diperlukan untuk tindak lanjut layanan, dengan peninjauan paling lambat 12 bulan setelah pendaftaran. Akses dibatasi untuk operator berwenang. Penyedia infrastruktur memproses data untuk menjalankan layanan. Data tidak dijual dan tidak digunakan untuk kampanye pemasaran tanpa persetujuan terpisah.</p><h2>Koreksi dan penghapusan</h2><p>Hubungi <a href="mailto:m.rifatsyauqii@gmail.com">m.rifatsyauqii@gmail.com</a> dari email pendaftaran dengan subjek “Privasi BTOS” untuk meminta akses, koreksi, atau penghapusan. Sertakan nomor referensi bila ada; jangan kirim password atau dokumen sensitif. Operator memverifikasi kepemilikan email sebelum memproses permintaan.</p><p>Penghapusan dilakukan pada data aktif dan daftar pemulihan backup. Backup terenkripsi tidak dipakai untuk operasional; bila dipulihkan, permintaan penghapusan diterapkan kembali sebelum layanan dibuka.</p><h2>Toko mandiri</h2><p>Database, pelanggan, dan media toko yang dipasang pada server sendiri berada di bawah pengelolaan pemilik toko. Pendaftaran di sini tidak memberikan akses platform ke server atau database tersebut.</p><p><a class="button primary" href="/pendaftaran">Kembali ke Pendaftaran</a></p></main></body></html>
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Kebijakan Privasi — Buat Toko Online Sendiri</title>
+    <link rel="stylesheet" href="/assets/css/registration.css" />
+  </head>
+  <body>
+    <header class="registration-header">
+      <a class="wordmark" href="/"
+        >Buat Toko<br />Online Sendiri<span>.</span></a
+      ><a href="/pendaftaran">Daftar / Masuk</a>
+    </header>
+    <main class="registration-shell article">
+      <h1>Kebijakan Privasi Platform</h1>
+      <p>Versi 2026-11-05.M1 · Berlaku saat platform M1 diaktifkan.</p>
+      <h2>Data dan tujuan penggunaan</h2>
+      <p>
+        Platform menyimpan email seller, waktu dan versi persetujuan, nama toko,
+        domain, email administrator toko, identitas agent, IP publik VPS yang
+        dilaporkan agent, versi rilis, status dan waktu instalasi. Data dipakai
+        untuk autentikasi, menghubungkan VPS milik seller, menjalankan
+        instalasi, dan membantu pemulihan.
+      </p>
+      <h2>Email OTP dan session</h2>
+      <p>
+        Resend memproses alamat email dan pesan OTP untuk pengiriman kode masuk.
+        Kode berlaku 10 menit dengan maksimal 5 percobaan, dan disimpan sebagai
+        HMAC, bukan teks kode. Session memakai cookie HttpOnly, Secure,
+        SameSite=Strict yang berlaku 12 jam. Tombol Keluar mencabut session saat
+        ini. Data login tidak disimpan di localStorage.
+      </p>
+      <h2>Pairing dan batas akses agent</h2>
+      <p>
+        Token pairing berlaku 15 menit dan sekali pakai untuk satu toko. Token
+        disimpan sebagai hash. Agent yang dijalankan dengan sudo pada VPS seller
+        dapat memasang runtime, database, dan aplikasi menggunakan installer
+        resmi. Agent mengirim status operasional, versi, IP publik, dan hasil
+        pemeriksaan kesehatan melalui HTTPS. Platform tidak menerima password
+        SSH, private key, password admin toko, atau isi database pelanggan.
+        Password awal administrator dibuat dan disimpan hanya pada VPS seller.
+      </p>
+      <p>
+        Seller dapat mencabut komunikasi agent dari wizard. Pencabutan memblokir
+        permintaan agent berikutnya, tetapi operasi lokal yang sedang berjalan
+        dapat menyelesaikan langkahnya. Untuk berhenti segera, jalankan
+        <code>sudo systemctl stop btos-agent</code> di VPS.
+      </p>
+      <h2>Keamanan dan retensi</h2>
+      <p>
+        Database platform terpisah dari database toko. Penghitung pembatasan
+        permintaan memakai HMAC dari identitas/IP dan dibersihkan setelah
+        kedaluwarsa ditambah satu hari. OTP yang kedaluwarsa dibersihkan setelah
+        satu hari; session kedaluwarsa dan token pairing dibersihkan berkala.
+        Data seller dan catatan instalasi disimpan selama diperlukan untuk
+        layanan dengan peninjauan paling lambat 12 bulan. Log aplikasi tidak
+        mencatat isi formulir, kode OTP, atau token. Log jaringan penyedia
+        infrastruktur dapat memproses alamat koneksi.
+      </p>
+      <h2>Akses, koreksi, dan penghapusan</h2>
+      <p>
+        Hubungi
+        <a href="mailto:m.rifatsyauqii@gmail.com">m.rifatsyauqii@gmail.com</a>
+        dari email terdaftar dengan subjek “Privasi BTOS”. Jangan kirim password
+        atau kunci rahasia. Operator memverifikasi kepemilikan sebelum koreksi
+        atau penghapusan, termasuk penerapan ulang penghapusan bila backup
+        dipulihkan. Data tidak dijual atau digunakan untuk pemasaran tanpa
+        persetujuan terpisah.
+      </p>
+      <h2>Toko mandiri</h2>
+      <p>
+        Pemilik toko bertanggung jawab terhadap database, pelanggan, produk,
+        pembayaran, pengiriman, domain, serta backup pada VPS sendiri. Pairing
+        bukan akses dukungan SSH umum. Pembaruan aplikasi memerlukan versi rilis
+        yang ditetapkan; agent M1 tidak menerima perintah shell bebas atau
+        pembaruan aplikasi otomatis.
+      </p>
+      <p>
+        <a href="/pendaftaran" class="button primary">Kembali ke pendaftaran</a>
+      </p>
+    </main>
+  </body>
+</html>

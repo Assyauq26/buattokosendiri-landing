@@ -1,1 +1,1 @@
-{"mode":"registration","registration_path":"/pendaftaran","accounts_enabled":false,"otp_enabled":false}
+{"mode":"platform","registration_path":"/pendaftaran","accounts_enabled":true,"otp_enabled":true,"installer_requires_approved_release":true}

@@ -1,72 +1,397 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="id">
-<head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Panduan Instalasi Toko — Buat Toko Online Sendiri</title>
-<meta name="description" content="Panduan instalasi toko mandiri: VPS Ubuntu 24.04, domain, wizard, dashboard, dan persiapan toko hingga live.">
-<link rel="canonical" href="https://buattokosendiri.web.id/panduan-instalasi/">
-<link rel="icon" type="image/svg+xml" href="/assets/img/favicon.svg">
-<link rel="stylesheet" href="/assets/css/fonts.css">
-<link rel="stylesheet" href="/panduan-instalasi/assets/guide.css">
-</head><body>
-<header><div class="top"><a class="brand" href="/">Buat Toko Online Sendiri</a><a class="home" href="/">← Kembali ke Beranda</a></div></header>
-<main>
-<div class="hero"><div class="eyebrow">Panduan resmi penggunaan installer</div><h1>Dari VPS kosong hingga toko online live</h1>
-<p class="muted">Ikuti panduan ini secara berurutan untuk memasang satu toko mandiri di server dan domain milik Anda. Estimasi waktu bergantung pada aktivasi VPS, DNS, koneksi internet, serta proses build.</p>
-<div class="note">Panduan ini mengikuti <a href="https://github.com/Assyauq26/buattokoonline">repository installer Buattokoonline</a>. Pendaftaran pada platform tidak otomatis membuat VPS atau toko. Instalasi membutuhkan akses administrator server.<div class="downloads"><a class="cta" href="/panduan-instalasi/panduan-instalasi.pdf" download="Panduan_Instalasi_Buat_Toko_Online_Sendiri.pdf" type="application/pdf">↓ Unduh Panduan PDF</a><a class="secondary-btn" href="#install">Mulai Tutorial</a></div></div>
-<div class="layout"><nav class="toc" aria-label="Daftar isi"><strong>Isi panduan</strong><a href="#persiapan">1. Persiapan</a><a href="#vps">2. Siapkan VPS</a><a href="#domain">3. Hubungkan domain</a><a href="#install">4. Jalankan installer</a><a href="#wizard">5. Selesaikan wizard</a><a href="#cek">6. Verifikasi live</a><a href="#dashboard">7. Atur dashboard</a><a href="#transaksi">8. Siapkan transaksi</a><a href="#masalah">9. Solusi masalah</a><a href="#perawatan">10. Backup & update</a></nav>
-<div>
-<section class="step" id="persiapan"><span class="number">LANGKAH 01</span><h2>Siapkan kebutuhan utama</h2>
-<ul><li>Domain sendiri (contoh <code>tokosaya.com</code>) dengan akses pengaturan DNS.</li><li>VPS baru Ubuntu <strong>24.04 LTS</strong>, minimal <strong>2 vCPU, RAM kelas 2 GB, 12 GB ruang kosong</strong>. Disarankan SSD 40 GB agar tersedia ruang untuk OS, database, media, dan update.</li><li>Jika RAM di bawah sekitar 4 GB, installer membutuhkan swap aktif sekitar <strong>2 GB</strong>.</li><li>Akses SSH, pengguna dengan <code>sudo</code>, dan port publik TCP 80/443.</li><li>Komputer dengan terminal (Windows PowerShell, macOS Terminal, atau Linux).</li></ul>
-<div class="note">Gunakan VPS kosong: installer menolak port penting yang sudah dipakai serta instalasi/data lama yang tidak dikenali. Jangan menjalankannya di server produksi lain.</div></section>
-<section class="step" id="vps"><span class="number">LANGKAH 02</span><h2>Masuk ke VPS dan periksa spesifikasi</h2>
-<p>Dapatkan IP publik, username SSH, dan metode autentikasi dari penyedia VPS. Dari komputer:</p><pre><code>ssh USER@IP_VPS</code></pre><p>Ganti <code>USER</code> dan <code>IP_VPS</code> dengan milik Anda. Di terminal VPS jalankan:</p>
-<pre><code>cat /etc/os-release
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Panduan Instalasi M1 — Buat Toko Online Sendiri</title>
+    <link rel="icon" href="/assets/img/favicon.svg" />
+    <link rel="stylesheet" href="/assets/css/fonts.css" />
+    <link rel="stylesheet" href="/panduan-instalasi/assets/guide.css" />
+    <link rel="stylesheet" href="/panduan-instalasi/assets/m1-guide.css" />
+  </head>
+  <body>
+    <header>
+      <div class="top">
+        <a class="brand" href="/">Buat Toko Online Sendiri</a
+        ><a class="home" href="/pendaftaran">Buka wizard →</a>
+      </div>
+    </header>
+    <main>
+      <div class="hero">
+        <div class="eyebrow">Panduan platform M1 · 5 November 2026</div>
+        <h1>Dari email pertama<br />hingga toko menerima pesanan.</h1>
+        <p class="muted">
+          Pasang aplikasi toko pada domain dan VPS milik Anda melalui wizard
+          terpusat Buat Toko Online Sendiri.
+        </p>
+        <div class="downloads">
+          <a
+            class="cta"
+            href="/panduan-instalasi/panduan-instalasi.pdf"
+            download
+            >↓ Unduh Panduan PDF</a
+          ><a class="secondary-btn" href="/pendaftaran">Mulai pendaftaran</a>
+        </div>
+        <div class="note">
+          Instalasi memerlukan konfigurasi email dan rilis yang disetujui
+          operator. Bila wizard menyatakan layanan belum tersedia, hubungi
+          operator. Jangan mengganti rilis dengan commit pengembangan. Tangkapan
+          layar panduan berasal dari UI M1 yang dirender lokal, bukan bukti
+          instalasi VPS berhasil.
+        </div>
+      </div>
+      <nav class="guide-nav" aria-label="Isi panduan">
+        <a href="#persiapan">Persiapan</a
+        ><a href="#registrasi">Registrasi & OTP</a
+        ><a href="#pairing">Pairing VPS</a
+        ><a href="#monitor">Instalasi & HTTPS</a><a href="#bisnis">Transaksi</a
+        ><a href="#pemulihan">Pemulihan</a>
+      </nav>
+      <section class="step" id="persiapan">
+        <span class="number">01 — DOMAIN</span>
+        <h2>Siapkan domain milik Anda</h2>
+        <p>
+          Pastikan Anda dapat masuk ke panel DNS. Contoh
+          <code>tokoceria.com</code> dalam panduan harus diganti domain yang
+          Anda miliki. Simpan daftar record sebelum perubahan. Jangan memakai
+          domain platform atau Hubify untuk toko seller.
+        </p>
+        <p>
+          Domain dibutuhkan pada langkah Informasi Toko. Isi tanpa https://,
+          path, atau port. Gunakan email administrator yang bisa Anda akses.
+        </p>
+      </section>
+      <section class="step">
+        <span class="number">02 — VPS</span>
+        <h2>Pilih VPS kosong</h2>
+        <ul>
+          <li>Ubuntu 24.04 LTS, x86_64 atau ARM64.</li>
+          <li>
+            Minimal 2 vCPU, RAM kelas 2 GB, dan ruang kosong 12 GB. SSD 40 GB
+            disarankan.
+          </li>
+          <li>RAM di bawah sekitar 4 GB memerlukan swap aktif sekitar 2 GB.</li>
+          <li>Akses sudo, internet keluar, serta TCP 80/443 masuk.</li>
+        </ul>
+        <div class="note">
+          Jangan menggunakan VPS berisi layanan atau database lain. Installer
+          menolak port yang dipakai atau data lama yang tidak dikenali. Biaya
+          domain, VPS, dan layanan pihak ketiga mengikuti penyedianya.
+        </div>
+      </section>
+      <section class="step">
+        <span class="number">03 — AKSES SERVER</span>
+        <h2>Masuk melalui terminal</h2>
+        <p>Buka PowerShell atau Terminal:</p>
+        <pre><code>ssh USER@IP_VPS</code></pre>
+        <p>
+          Ganti USER dan IP_VPS sesuai penyedia. Cocokkan fingerprint host
+          dengan Console penyedia sebelum menerima host baru. Di VPS:
+        </p>
+        <pre><code>sudo -v
+cat /etc/os-release
 nproc
 free -h
 swapon --show
-df -h
-sudo -v</code></pre>
-<p>Pastikan Ubuntu 24.04, sekurangnya 2 vCPU, RAM cukup, dan ruang kosong minimal 12 GB. Jika swap belum tersedia pada VPS 2 GB, minta bantuan administrator atau ikuti dokumentasi penyedia VPS untuk menambah swap secara aman.</p>
-<p>Periksa firewall penyedia VPS dan sistem operasi: izinkan SSH hanya dari alamat yang dipercaya jika memungkinkan, serta HTTP 80 dan HTTPS 443 untuk publik. Jangan membuka port database 5432, port aplikasi internal, atau wizard 8787.</p></section>
-<section class="step" id="domain"><span class="number">LANGKAH 03</span><h2>Arahkan domain ke VPS</h2>
-<ol><li>Di panel DNS domain, buat record <strong>A</strong> untuk <code>@</code> menuju <code>IP_VPS</code>.</li><li>Opsional: tambahkan <strong>CNAME</strong> <code>www</code> menuju domain utama, jika didukung penyedia DNS.</li><li>Hapus record A/AAAA yang bertentangan; jangan hapus MX/TXT email yang tidak terkait.</li><li>Tunggu propagasi DNS. Anda dapat memeriksa dari komputer:</li></ol>
-<pre><code>nslookup tokosaya.com 1.1.1.1
-nslookup tokosaya.com 8.8.8.8</code></pre>
-<p>Hasil A harus mengarah ke IP VPS Anda. Saat wizard berjalan, domain dan HTTPS akan diverifikasi lagi secara otomatis.</p></section>
-<section class="step" id="install"><span class="number">LANGKAH 04</span><h2>Unduh aplikasi dan jalankan installer</h2>
-<p>Di sesi SSH VPS, jalankan secara berurutan:</p>
-<pre><code>sudo apt-get update
-sudo apt-get install -y git
-git clone https://github.com/Assyauq26/buattokoonline.git
-cd buattokoonline
-sudo bash install.sh</code></pre>
-<p>Installer memeriksa perangkat, menyiapkan Docker jika diperlukan, lalu memberi tautan wizard lokal. Proses build dapat berlangsung beberapa waktu. Simpan output kesalahan jika terjadi gagal; <strong>jangan</strong> menghapus volume database untuk mencoba ulang.</p>
-<div class="note danger">Jangan menjalankan perintah installer dari sumber yang tidak dikenal. Tinjau repository dan script terlebih dahulu jika VPS menyimpan data penting.</div></section>
-<section class="step" id="wizard"><span class="number">LANGKAH 05</span><h2>Buka wizard melalui SSH tunnel yang aman</h2>
-<p>Biarkan installer berjalan di terminal VPS. Buka terminal <strong>kedua di komputer Anda</strong> dan jalankan:</p>
-<pre><code>ssh -L 8787:127.0.0.1:8787 USER@IP_VPS</code></pre>
-<p>Lalu buka alamat <code>http://127.0.0.1:8787</code> pada browser komputer, sesuai petunjuk/token yang muncul di terminal installer. Wizard hanya melayani loopback lokal; jangan buka port 8787 ke internet atau bagikan tautan setup.</p>
-<ol><li><strong>Nama Toko:</strong> masukkan brand dan identitas toko.</li><li><strong>Hubungkan Domain:</strong> masukkan domain, periksa DNS, koneksi publik, dan sertifikat HTTPS tepercaya.</li><li><strong>Buat Admin:</strong> tentukan email dan password kuat untuk dashboard, lalu konfirmasi.</li><li><strong>Selesai:</strong> wizard mengunci proses setup pertama dan menampilkan tautan storefront serta dashboard.</li></ol>
-<h3>Pratinjau layar wizard</h3><p class="muted">Ilustrasi berikut mengikuti urutan dan field pada source installer resmi. Ini bukan screenshot dari sesi instalasi VPS live.</p><div class="preview-grid"><figure><img src="/panduan-instalasi/assets/01-nama-toko.svg" alt="Ilustrasi wizard Nama Toko: input nama brand dan tombol Lanjutkan" loading="lazy"><figcaption>1. Nama Toko / Brand</figcaption></figure><figure><img src="/panduan-instalasi/assets/02-hubungkan-domain.svg" alt="Ilustrasi wizard domain dan pemeriksaan record DNS" loading="lazy"><figcaption>2. Hubungkan domain dan validasi DNS</figcaption></figure><figure><img src="/panduan-instalasi/assets/03-buat-admin.svg" alt="Ilustrasi wizard membuat email dan password administrator" loading="lazy"><figcaption>3. Buat akun administrator</figcaption></figure><figure><img src="/panduan-instalasi/assets/04-selesai.svg" alt="Ilustrasi layar instalasi selesai dengan tombol dashboard" loading="lazy"><figcaption>4. Selesai, masuk dashboard toko</figcaption></figure></div><p>Jika koneksi terputus, lanjutkan dari progres installer yang tersimpan sesuai petunjuk operasi repository. Jangan menjalankan instalasi baru yang menimpa data.</p></section>
-<section class="step" id="cek"><span class="number">LANGKAH 06</span><h2>Periksa bahwa toko sudah online</h2>
-<ul class="checklist"><li>Domain utama membuka storefront dengan HTTPS dan ikon gembok yang valid.</li><li>URL dashboard dari halaman selesai bisa diakses.</li><li>Admin dapat login dengan akun yang dibuat di wizard.</li><li>Tidak ada error 502/503, redirect berulang, atau sertifikat tidak dipercaya.</li><li>Halaman toko dapat dibuka lewat perangkat dan jaringan lain.</li></ul>
-<div class="note ok">Jika semua lulus, aplikasi <strong>sudah online</strong>. Tetapi toko belum tentu siap menerima pesanan sampai pengaturan bisnis dan pembayaran/pengiriman selesai.</div></section>
-<section class="step" id="dashboard"><span class="number">LANGKAH 07</span><h2>Lengkapi pengaturan di dashboard seller</h2>
-<ol><li>Isi identitas, logo, deskripsi toko, dan alamat kontak.</li><li>Atur dekorasi/tema lalu <strong>publikasikan</strong> perubahan tampilan.</li><li>Buat kategori dan produk, harga, variasi, foto, serta stok nyata.</li><li>Konfigurasikan rekening pembayaran manual yang didukung.</li><li>Atur email pengirim/Resend dan verifikasi OTP registrasi pelanggan sebelum membuka pendaftaran publik.</li><li>Periksa kebijakan privasi, syarat, dan informasi layanan pelanggan.</li></ol>
-<p>Toko baru sengaja dimulai tanpa produk, pesanan, pelanggan, atau kredensial J&T milik toko contoh.</p></section>
-<section class="step" id="transaksi"><span class="number">LANGKAH 08</span><h2>Aktifkan alur transaksi dengan aman</h2>
-<p>Masuk ke menu Pengiriman. Jika tersedia, gunakan ongkir manual sesuai konfigurasi yang telah dirilis; untuk J&T Express, masukkan kredensial seller sendiri, mapping wilayah resmi, alamat gudang, lalu lakukan tes tarif sesuai dokumentasi. <strong>Jangan aktifkan J&T bila tarif atau mapping belum valid.</strong></p>
-<ol><li>Uji daftar/login pelanggan menggunakan OTP email nyata.</li><li>Buat produk uji dan alamat tujuan yang valid.</li><li>Uji keranjang, checkout, penghitungan total, pembayaran, dan pesanan menggunakan skenario yang aman.</li><li>Pastikan tarif pengiriman valid sebelum checkout diterima.</li><li>Uji email notifikasi, tampilan mobile, dan akses dashboard.</li><li>Setelah seluruh pemeriksaan lulus, umumkan domain toko kepada pelanggan.</li></ol>
-<div class="note">Nama menu dan metode ongkir mengikuti versi aplikasi yang benar-benar terpasang. Fitur yang belum dirilis tidak otomatis tersedia hanya karena tercantum dalam roadmap.</div></section>
-<section class="step" id="masalah"><span class="number">LANGKAH 09</span><h2>Jika instalasi belum berhasil</h2>
-<ul><li><strong>DNS gagal:</strong> pastikan A record benar dan tidak ada A/AAAA konflik; tunggu propagasi.</li><li><strong>HTTPS gagal:</strong> pastikan port 80/443 dapat diakses dari internet dan DNS mengarah ke VPS.</li><li><strong>Wizard tidak terbuka:</strong> pastikan SSH tunnel masih aktif dan akses melalui <code>127.0.0.1:8787</code>, bukan IP publik.</li><li><strong>RAM/swap/disk kurang:</strong> periksa <code>free -h</code>, <code>swapon --show</code>, <code>df -h</code> lalu penuhi persyaratan.</li><li><strong>Port terpakai:</strong> gunakan VPS bersih; jangan mematikan layanan yang tidak dikenal.</li><li><strong>Checkout tertahan:</strong> periksa konfigurasi pengiriman dan tarif valid, bukan menonaktifkan pemeriksaan keselamatan.</li></ul>
-<p>Baca <a href="https://github.com/Assyauq26/buattokoonline/blob/main/docs/operations.md">panduan pemulihan operasional</a> dan sertakan pesan error yang sudah disamarkan saat meminta bantuan.</p></section>
-<section class="step" id="perawatan"><span class="number">LANGKAH 10</span><h2>Backup, pembaruan, dan keamanan berkala</h2>
-<p>Cadangkan database dan media di lokasi terpisah, uji prosedur pemulihan, pantau kapasitas disk, dan perbarui keamanan OS. Untuk memeriksa update aplikasi dari direktori repository:</p>
-<pre><code>sudo bash update.sh --check</code></pre>
-<p>Jika ada versi stabil kompatibel, baca catatan rilis dan backup terlebih dahulu. Terapkan versi spesifik sesuai petunjuk resmi:</p>
-<pre><code>sudo bash update.sh --apply --version VERSI_RILIS</code></pre>
-<p>Ganti <code>VERSI_RILIS</code> dengan versi yang benar-benar tersedia. Jangan menjalankan angka contoh sebagai versi nyata. Lihat <a href="https://github.com/Assyauq26/buattokoonline/blob/main/docs/updates.md">dokumentasi update dan backup</a>.</p></section>
-<section class="step"><h2>Checklist akhir: toko siap diumumkan?</h2><ul class="checklist"><li>Domain dan HTTPS valid</li><li>Admin bisa login</li><li>Produk, foto, harga, dan stok benar</li><li>Rekening dan metode pembayaran terkonfigurasi</li><li>OTP email berhasil diuji</li><li>Pengiriman dan ongkir valid</li><li>Checkout end-to-end berhasil diuji</li><li>Backup serta pemulihan siap</li></ul><div class="downloads"><a class="cta" href="/panduan-instalasi/panduan-instalasi.pdf" download="Panduan_Instalasi_Buat_Toko_Online_Sendiri.pdf">↓ Unduh PDF</a><a class="secondary-btn" href="/pendaftaran">Mulai Pendaftaran</a></div></section>
-</div></div></main><footer>© 2026 Buat Toko Online Sendiri · <a href="/">Beranda</a></footer></body></html>
+df -h /var</code></pre>
+        <p>
+          Tingkatkan spesifikasi bila kurang. Ikuti petunjuk penyedia untuk
+          menambah swap tanpa menimpa file lama. Batasi SSH ke alamat operator.
+          Jangan membuka port 5432, 3000, atau 8787 ke publik.
+        </p>
+      </section>
+      <section class="step" id="registrasi">
+        <span class="number">04 — REGISTRASI</span>
+        <h2>Mulai dari email Anda</h2>
+        <p>
+          Buka
+          <a href="https://buattokosendiri.web.id/pendaftaran"
+            >buattokosendiri.web.id/pendaftaran</a
+          >. Isi email aktif, baca Kebijakan Privasi, centang persetujuan jika
+          setuju, lalu klik <strong>Kirim kode OTP</strong>.
+        </p>
+        <figure>
+          <img
+            src="/panduan-instalasi/assets/m1-email.png"
+            alt="UI asli formulir email M1"
+          />
+          <figcaption>
+            UI asli Registrasi, dirender lokal. Data contoh tidak dikirim
+            melalui email nyata.
+          </figcaption>
+        </figure>
+      </section>
+      <section class="step">
+        <span class="number">05 — OTP</span>
+        <h2>Verifikasi email</h2>
+        <p>
+          Masukkan kode 6 digit dari kotak masuk. Kode berlaku 10 menit dan
+          sekali pakai, maksimal 5 percobaan. Klik
+          <strong>Verifikasi &amp; lanjutkan</strong>. Jika email belum masuk,
+          periksa spam dan alamat, lalu gunakan Kirim ulang setelah menunggu
+          minimal satu menit. Pengiriman dibatasi per jam.
+        </p>
+        <p>
+          Jangan bagikan kode. Session berlaku 12 jam. Masuk dengan email yang
+          sama untuk melanjutkan toko tersimpan. Akun seller platform berbeda
+          dari akun administrator toko.
+        </p>
+      </section>
+      <section class="step">
+        <span class="number">06 — INFORMASI TOKO</span>
+        <h2>Tetapkan identitas toko</h2>
+        <p>
+          Isi nama toko, domain milik Anda, dan email administrator. Klik
+          <strong>Simpan &amp; lanjutkan</strong>. Periksa ejaan: informasi
+          dikunci setelah pairing. Satu akun seller M1 mengelola satu toko.
+        </p>
+        <figure>
+          <img
+            src="/panduan-instalasi/assets/m1-store.png"
+            alt="UI asli nama, domain, dan email administrator"
+          />
+          <figcaption>
+            UI asli Informasi Toko dengan data sintetis lokal.
+          </figcaption>
+        </figure>
+      </section>
+      <section class="step" id="pairing">
+        <span class="number">07 — PAIRING</span>
+        <h2>Hubungkan VPS Anda</h2>
+        <p>
+          Klik <strong>Buat perintah pairing</strong>. Perintah bootstrap dan
+          token pribadi ditampilkan terpisah. Token berlaku 15 menit untuk
+          memasangkan satu VPS ke toko ini. Token baru membatalkan token lama
+          yang belum dipakai.
+        </p>
+        <figure>
+          <img
+            src="/panduan-instalasi/assets/m1-pair.png"
+            alt="UI asli petunjuk menghubungkan VPS"
+          />
+          <figcaption>
+            UI Hubungkan VPS sebelum token pribadi dibuat.
+          </figcaption>
+        </figure>
+      </section>
+      <section class="step">
+        <span class="number">08 — BOOTSTRAP</span>
+        <h2>Jalankan perintah dari wizard</h2>
+        <ol>
+          <li>Klik Salin perintah, lalu jalankan di terminal VPS.</li>
+          <li>
+            Bootstrap memastikan server tidak berisi toko lain, mengunduh agent
+            dengan checksum, lalu meminta token.
+          </li>
+          <li>
+            Klik Salin token dan tempel ketika terminal meminta token. Input
+            disembunyikan.
+          </li>
+          <li>
+            Sesudah pairing berhasil, agent berjalan sebagai service. Kembali ke
+            browser.
+          </li>
+        </ol>
+        <p>
+          Jangan memasukkan token ke chat, URL, atau perintah shell. Platform
+          tidak meminta password SSH atau private key. Agent mengambil pekerjaan
+          yang dikenal melalui koneksi HTTPS keluar.
+        </p>
+      </section>
+      <section class="step" id="monitor">
+        <span class="number">09 — STATUS INSTALASI</span>
+        <h2>Pantau operasi nyata</h2>
+        <p>
+          Halaman Instalasi menampilkan heartbeat, waktu terakhir, dan tahap
+          aktif dari backend. Tidak ada progress bar berbasis waktu. Runtime
+          disiapkan, DNS/HTTPS diverifikasi, lalu installer resmi menjalankan
+          build, database, admin, dan health check. Urutan mengikuti persyaratan
+          keamanan installer lama.
+        </p>
+        <p>
+          Build pada VPS 2 GB dapat memerlukan beberapa menit. Tab boleh
+          ditutup. Jika heartbeat berhenti, periksa koneksi dan service. Jika
+          gagal, perbaiki penyebabnya lalu klik
+          <strong>Periksa lagi / lanjutkan</strong>. Jangan menghapus database.
+        </p>
+      </section>
+      <section class="step">
+        <span class="number">10 — DNS TOKO</span>
+        <h2>Arahkan domain ke VPS seller</h2>
+        <ol>
+          <li>
+            Buat A record <code>@</code> menuju IP publik VPS pada wizard.
+          </li>
+          <li>Koreksi A lain yang menunjuk server berbeda.</li>
+          <li>Koreksi AAAA jika IPv6 tidak tersedia pada VPS.</li>
+          <li>Pertahankan MX, SPF, DKIM, DMARC, dan record email.</li>
+          <li>Tunggu propagasi dan klik Periksa lagi.</li>
+        </ol>
+        <pre><code>nslookup tokoceria.com 1.1.1.1
+nslookup tokoceria.com 8.8.8.8</code></pre>
+        <p>
+          Installer memeriksa dua resolver, IP VPS, dan challenge HTTP. M1
+          memasang domain persis yang Anda isi; www tambahan perlu dikonfigurasi
+          terpisah setelah instalasi.
+        </p>
+      </section>
+      <section class="step">
+        <span class="number">11 — HTTPS</span>
+        <h2>Tunggu sertifikat valid</h2>
+        <p>
+          Setelah DNS benar dan port 80/443 dapat diakses, installer meminta
+          sertifikat dan memverifikasi hostname serta certificate chain. Jika
+          tertahan, periksa firewall cloud/VPS, AAAA, CAA, dan propagasi. Jangan
+          memakai --insecure atau mematikan pemeriksaan TLS.
+        </p>
+        <p>
+          Selesai hanya ditampilkan setelah agent melaporkan HTTPS valid,
+          aplikasi sehat, dan versi sesuai rilis. Verifikasi juga dari perangkat
+          atau jaringan lain.
+        </p>
+      </section>
+      <section class="step" id="bisnis">
+        <span class="number">12 — DASHBOARD</span>
+        <h2>Masuk sebagai administrator</h2>
+        <p>
+          Klik <strong>Buka Dashboard</strong> pada Toko Siap. Gunakan email
+          administrator yang Anda daftarkan. Password acak dibuat hanya di VPS:
+        </p>
+        <pre><code>sudo cat /etc/btos-agent/admin-password</code></pre>
+        <p>
+          Simpan di pengelola password, ubah melalui alur akun aplikasi, dan
+          pastikan login baru berhasil. Hapus salinan password awal setelah
+          akses baru dipastikan. Platform tidak menyimpan password toko.
+        </p>
+      </section>
+      <section class="step">
+        <span class="number">13 — PRODUK</span>
+        <h2>Isi katalog dan tampilan</h2>
+        <p>
+          Lengkapi identitas, logo, deskripsi, dan kontak. Buat kategori dan
+          produk beserta foto, harga, stok, berat, dan variasi yang benar.
+          Publikasikan dekorasi jika diminta. Periksa storefront desktop dan
+          mobile. Toko baru tidak membawa produk atau pelanggan Hubify.
+        </p>
+      </section>
+      <section class="step">
+        <span class="number">14 — PEMBAYARAN</span>
+        <h2>Lengkapi metode pembayaran</h2>
+        <p>
+          Gunakan metode yang didukung versi rilis. Untuk pembayaran manual, isi
+          bank, nama pemilik, dan nomor rekening. Uji petunjuk pembayaran serta
+          konfirmasi pesanan. Jangan memakai kredensial demo. Jika email
+          pelanggan membutuhkan Resend, gunakan domain pengirim terverifikasi
+          dan kredensial milik toko.
+        </p>
+      </section>
+      <section class="step">
+        <span class="number">15 — PENGIRIMAN</span>
+        <h2>Pastikan ongkir valid</h2>
+        <p>
+          Isi alamat asal/gudang dan pengiriman. Gunakan ongkir manual jika
+          tersedia pada rilis. Untuk J&amp;T, masukkan kredensial seller sendiri
+          dan mapping wilayah resmi lalu uji tarif. Jangan aktifkan layanan bila
+          tarif atau mapping belum valid. Fitur yang terlihat di Hubify belum
+          tentu tersedia pada rilis installer Anda.
+        </p>
+      </section>
+      <section class="step">
+        <span class="number">16 — SIAP TRANSAKSI</span>
+        <h2>Periksa sebelum menerima pesanan</h2>
+        <ul class="checklist">
+          <li>HTTPS valid, storefront terbuka dari jaringan lain.</li>
+          <li>Admin bisa masuk, katalog aktif, harga dan stok benar.</li>
+          <li>
+            Pembayaran dan pengiriman lengkap; checkout mengikuti aturan
+            aplikasi.
+          </li>
+          <li>
+            Uji keranjang, alamat, ongkir, total, pembayaran, dan status
+            pesanan.
+          </li>
+          <li>Uji email pelanggan dan tampilan mobile.</li>
+          <li>Simpan backup serta prosedur pemulihan.</li>
+        </ul>
+        <div class="note ok">
+          Instalasi selesai tidak otomatis berarti bisnis siap bertransaksi.
+          Umumkan domain setelah alur bisnis berhasil diuji.
+        </div>
+      </section>
+      <section class="step" id="pemulihan">
+        <h2>Jika proses terhenti</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Gejala</th>
+              <th>Tindakan</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>OTP tidak masuk</td>
+              <td>
+                Periksa alamat, spam, dan cooldown. Hubungi operator bila email
+                belum dikonfigurasi.
+              </td>
+            </tr>
+            <tr>
+              <td>Token kedaluwarsa</td>
+              <td>
+                Buat token baru sebelum pairing. Jangan hapus konfigurasi agent
+                terhubung.
+              </td>
+            </tr>
+            <tr>
+              <td>Agent offline</td>
+              <td>Periksa service dan koneksi HTTPS keluar.</td>
+            </tr>
+            <tr>
+              <td>DNS/HTTPS menunggu</td>
+              <td>
+                Periksa A/AAAA, firewall 80/443, propagasi, CAA. Lalu Periksa
+                lagi.
+              </td>
+            </tr>
+            <tr>
+              <td>Build/migrasi gagal</td>
+              <td>
+                Periksa disk/RAM/swap dan log root-only. Jangan hapus volume;
+                lanjutkan pekerjaan yang sama.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <pre><code>sudo systemctl status btos-agent
+sudo journalctl -u btos-agent -n 50 --no-pager
+sudo cat /etc/single-store/operation.log</code></pre>
+        <p>
+          Jangan membagikan secret atau data pelanggan dari log. Wizard lokal
+          dapat dipakai untuk pemulihan melalui SSH tunnel dengan bantuan
+          operator. Hentikan agent sebelum memakainya dan jangan mengekspos port
+          wizard ke internet.
+        </p>
+        <h2>Backup, update, dan pencabutan</h2>
+        <p>
+          Pertahankan backup/restore bawaan toko dan verifikasi pemulihannya
+          sebelum update. Gunakan versi rilis yang disetujui, bukan HEAD branch.
+          Agent M1 tidak menjalankan update jarak jauh. Tombol Cabut akses agent
+          menghentikan komunikasi berikutnya; untuk berhenti segera jalankan
+          <code>sudo systemctl stop btos-agent</code>.
+        </p>
+        <p>
+          Referensi:
+          <a href="https://github.com/Assyauq26/buattokoonline"
+            >installer dan dokumentasi toko</a
+          >,
+          <a href="https://github.com/Assyauq26/buattokosendiri-landing"
+            >platform pusat</a
+          >.
+        </p>
+      </section>
+    </main>
+    <footer class="guide-footer">
+      Buat Toko Online Sendiri · buattokosendiri.web.id · Panduan M1
+    </footer>
+  </body>
+</html>
