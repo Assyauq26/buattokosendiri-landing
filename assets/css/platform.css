@@ -44,32 +44,16 @@ code {
   display: block;
   margin-top: 18px;
 }
-.installation-stages {
-  list-style: none;
-  padding: 0;
-  display: grid;
-  gap: 8px;
-}
-.installation-stages li {
-  padding: 13px 15px;
-  border: 1px solid #e5e7eb;
-  border-radius: 9px;
-  font-size: 13px;
+.install-progress-header {
   display: flex;
   justify-content: space-between;
+  align-items: center;
   gap: 12px;
 }
-.installation-stages li[data-active="true"] {
-  background: #fff1ef;
-  border-color: #e1251b;
-  color: #9b2119;
-}
-.installation-stages small {
-  color: #626873;
-}
-.installation-stages li[data-done="true"] {
-  border-color: #afd1b6;
-  background: #f4fbf5;
+#install-progress {
+  width: 100%;
+  height: 16px;
+  accent-color: #bc291f;
 }
 #job-state {
   font-weight: 600;

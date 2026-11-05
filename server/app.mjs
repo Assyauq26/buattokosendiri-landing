@@ -11,6 +11,7 @@ import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { isIP } from "node:net";
+import { checkStoreDns, installerPasswordVault, isStoreIpv4, validAdminPassword } from "./store-setup.mjs";
 const ROOT = fileURLToPath(new URL("../", import.meta.url));
 export const STAGES = [
   "preflight",
@@ -24,6 +25,14 @@ export const STAGES = [
   "complete",
 ];
 export const CONSENT = "2026-11-05.M1";
+const STAGE_PROGRESS = { preflight: 8, runtime: 20, dns: 34, https: 45, application: 55, database: 72, admin: 85, health: 94 };
+const STORE_FIELDS = "id,name,domain,admin_email,host(vps_ipv4) AS vps_ipv4";
+const DNS_MESSAGES = {
+  ready: "DNS sudah mengarah ke IP VPS Anda.",
+  pending: "Record A belum mengarah ke IP VPS di kedua resolver. Periksa pengaturan lalu coba lagi setelah DNS menyebar.",
+  ipv6: "Domain masih punya record AAAA. Hapus record AAAA untuk hostname toko ini agar instalasi IPv4 bisa dilanjutkan.",
+  unavailable: "DNS belum bisa diperiksa. Coba lagi sebentar.",
+};
 const digest = (value) => createHash("sha256").update(value).digest("hex");
 const token = () => randomBytes(32).toString("hex");
 export class ApiError extends Error {
@@ -59,7 +68,8 @@ function domain(value) {
     reject(422, "Gunakan domain toko milik Anda sendiri.");
   return value;
 }
-export function createApp({ pool, config, sendMail }) {
+export function createApp({ pool, config, sendMail, checkDns = checkStoreDns }) {
+  const passwordVault = installerPasswordVault(config.secret);
   const installerTestEmails = config.installerTestEmails || [];
   const canSignIn = (email) => !config.sellerPilotOnly || installerTestEmails.includes(email);
   const mac = (value) =>
@@ -259,7 +269,7 @@ export function createApp({ pool, config, sendMail }) {
         if (!candidate) reject(410, "Token pairing kedaluwarsa.");
         // Match issuance lock order: store first, then token.
         const { rows: [store] } = await db.query(
-          `SELECT s.id, u.email FROM stores s JOIN sellers u ON u.id=s.seller_id
+          `SELECT s.id, host(s.vps_ipv4) AS vps_ipv4, u.email FROM stores s JOIN sellers u ON u.id=s.seller_id
            WHERE s.id=$1 FOR UPDATE OF s`, [candidate.store_id],
         );
         if (!store || !installerTestEmails.includes(store.email))
@@ -280,8 +290,12 @@ export function createApp({ pool, config, sendMail }) {
             [pair.agent_id, digest(data.credential)],
           );
           if (!existing) reject(409, "Token pairing telah dipakai.");
-          return { agentId: existing.id };
+          return { agentId: existing.id, passwordFromWizard: Boolean(store.vps_ipv4) };
         }
+        if (store.vps_ipv4 && data.protocol !== 2)
+          reject(409, "Unduh ulang perintah bootstrap terbaru dari wizard.");
+        if (store.vps_ipv4 && data.ipv4 !== store.vps_ipv4)
+          reject(409, "IP VPS ini tidak sama dengan IP di Info Toko. Pairing belum dilakukan.");
         const {
           rows: [existing],
         } = await db.query("SELECT id FROM agents WHERE store_id=$1", [
@@ -307,7 +321,7 @@ export function createApp({ pool, config, sendMail }) {
           "INSERT INTO jobs(id,store_id,agent_id,release) VALUES($1,$2,$3,$4)",
           [randomUUID(), store.id, id, release],
         );
-        return { agentId: id };
+        return { agentId: id, passwordFromWizard: Boolean(store.vps_ipv4) };
       });
       return reply(200, result);
     }
@@ -323,10 +337,19 @@ export function createApp({ pool, config, sendMail }) {
         const {
           rows: [store],
         } = await pool.query(
-          "SELECT name,domain,admin_email FROM stores WHERE id=$1",
+          `SELECT ${STORE_FIELDS} FROM stores WHERE id=$1`,
           [a.store_id],
         );
         return reply(200, { job, store });
+      }
+      if (route === "/agent/admin-password" && req.method === "GET") {
+        const { rows: [store] } = await pool.query(
+          `SELECT s.id,s.admin_password_sealed FROM stores s JOIN jobs j ON j.store_id=s.id
+           JOIN agents a ON a.id=j.agent_id WHERE a.id=$1 AND a.revoked_at IS NULL
+           AND j.state='running' AND j.stage IN ('https','application','database','admin','health')`, [a.id],
+        );
+        if (!store?.admin_password_sealed) reject(409, "Password instalasi tidak tersedia.");
+        return reply(200, { password: passwordVault.open(store.id, store.admin_password_sealed) });
       }
       if (route === "/agent/event" && req.method === "POST") {
         if (
@@ -383,6 +406,8 @@ export function createApp({ pool, config, sendMail }) {
             "UPDATE jobs SET sequence=$2,stage=$3,state=$4,evidence=evidence || $5::jsonb,updated_at=now(),lease_until=now()+interval '90 seconds' WHERE id=$1",
             [job.id, data.sequence, data.stage, data.state, evidence],
           );
+          if (data.state === "complete")
+            await db.query("UPDATE stores SET admin_password_sealed=NULL WHERE id=$1", [job.store_id]);
           return { ok: true, sequence: data.sequence };
         });
         return reply(200, result);
@@ -402,6 +427,13 @@ export function createApp({ pool, config, sendMail }) {
       await pool.query("DELETE FROM sessions WHERE digest=$1", [digest(raw)]);
       return reply(200, { ok: true }, { "Set-Cookie": cookie("", 0) });
     }
+    if (route === "/store/dns" && req.method === "POST") {
+      const d = domain(data.domain);
+      if (!isStoreIpv4(data.vpsIpv4)) reject(422, "Masukkan IPv4 publik VPS toko yang valid.");
+      await rate("store-dns:" + user.id, 30, 600);
+      const status = await checkDns(d, data.vpsIpv4);
+      return reply(200, { ready: status === "ready", message: DNS_MESSAGES[status] });
+    }
     if (route === "/store" && req.method === "POST") {
       if (
         typeof data.name !== "string" ||
@@ -413,6 +445,12 @@ export function createApp({ pool, config, sendMail }) {
         reject(422, "Nama toko harus 1–100 karakter.");
       const d = domain(data.domain),
         admin = email(data.adminEmail);
+      if (!isStoreIpv4(data.vpsIpv4)) reject(422, "Masukkan IPv4 publik VPS toko yang valid.");
+      if (!validAdminPassword(data.adminPassword, data.adminPasswordConfirmation))
+        reject(422, "Password harus cocok, minimal 12 karakter, maksimal 72 byte, dan memakai tiga jenis karakter.");
+      await rate("store-dns:" + user.id, 30, 600);
+      const dnsStatus = await checkDns(d, data.vpsIpv4);
+      if (dnsStatus !== "ready") reject(422, DNS_MESSAGES[dnsStatus]);
       const row = await tx(async (db) => {
         await db.query("SELECT id FROM sellers WHERE id=$1 FOR UPDATE", [
           user.id,
@@ -431,13 +469,15 @@ export function createApp({ pool, config, sendMail }) {
           if (rowCount)
             reject(409, "Informasi toko dikunci setelah VPS dipasangkan.");
         }
+        const storeId = existing?.id || randomUUID();
         const {
           rows: [store],
         } = await db.query(
-          `INSERT INTO stores(id,seller_id,name,domain,admin_email) VALUES($1,$2,$3,$4,$5)
-      ON CONFLICT(seller_id) DO UPDATE SET name=$3,domain=$4,admin_email=$5 RETURNING *`,
-          [randomUUID(), user.id, data.name, d, admin],
+          `INSERT INTO stores(id,seller_id,name,domain,admin_email,vps_ipv4,admin_password_sealed) VALUES($1,$2,$3,$4,$5,$6,$7)
+      ON CONFLICT(seller_id) DO UPDATE SET name=$3,domain=$4,admin_email=$5,vps_ipv4=$6,admin_password_sealed=$7 RETURNING ${STORE_FIELDS}`,
+          [storeId, user.id, data.name, d, admin, data.vpsIpv4, passwordVault.seal(storeId, data.adminPassword)],
         );
+        await db.query("DELETE FROM pairings WHERE store_id=$1 AND consumed_at IS NULL", [store.id]);
         return store;
       });
       return reply(200, { store: row });
@@ -445,7 +485,7 @@ export function createApp({ pool, config, sendMail }) {
     if (route === "/store" && req.method === "GET") {
       const {
         rows: [store],
-      } = await pool.query("SELECT * FROM stores WHERE seller_id=$1", [
+      } = await pool.query(`SELECT ${STORE_FIELDS} FROM stores WHERE seller_id=$1`, [
         user.id,
       ]);
       if (!store) return reply(200, { store: null });
@@ -461,6 +501,13 @@ export function createApp({ pool, config, sendMail }) {
         "SELECT id,last_seen,revoked_at FROM agents WHERE store_id=$1",
         [store.id],
       );
+      if (job) {
+        const { rows } = await pool.query(
+          "SELECT DISTINCT stage FROM job_events WHERE job_id=$1 AND state IN ('running','waiting_dns')", [job.id],
+        );
+        job.progress = job.state === "complete" ? 100 :
+          Math.max(0, ...rows.map(({ stage }) => STAGE_PROGRESS[stage] || 0));
+      }
       return reply(200, { store, job: job || null, agent: a || null });
     }
     if (route === "/pairing" && req.method === "POST") {
@@ -481,6 +528,8 @@ export function createApp({ pool, config, sendMail }) {
           [user.id],
         );
         if (!store) reject(422, "Lengkapi informasi toko.");
+        if (!store.vps_ipv4 || !store.admin_password_sealed)
+          reject(422, "Lengkapi DNS dan password dashboard di Info Toko.");
         if (
           (
             await db.query("SELECT id FROM agents WHERE store_id=$1", [
@@ -489,6 +538,8 @@ export function createApp({ pool, config, sendMail }) {
           ).rowCount
         )
           reject(409, "VPS sudah dipasangkan.");
+        const dnsStatus = await checkDns(store.domain, store.vps_ipv4);
+        if (dnsStatus !== "ready") reject(422, DNS_MESSAGES[dnsStatus]);
         await db.query(
           "DELETE FROM pairings WHERE store_id=$1 AND consumed_at IS NULL",
           [store.id],
@@ -507,10 +558,12 @@ export function createApp({ pool, config, sendMail }) {
       });
     }
     if (route === "/revoke" && req.method === "POST") {
-      await pool.query(
-        "UPDATE agents SET revoked_at=now() WHERE store_id IN (SELECT id FROM stores WHERE seller_id=$1)",
-        [user.id],
-      );
+      await tx(async (db) => {
+        const { rows } = await db.query(
+          "UPDATE agents SET revoked_at=now() FROM stores WHERE agents.store_id=stores.id AND stores.seller_id=$1 RETURNING store_id", [user.id],
+        );
+        if (rows.length) await db.query("UPDATE stores SET admin_password_sealed=NULL WHERE id=$1", [rows[0].store_id]);
+      });
       return reply(200, { ok: true });
     }
     if (route === "/retry" && req.method === "POST") {

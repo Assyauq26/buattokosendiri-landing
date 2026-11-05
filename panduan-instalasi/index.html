@@ -141,14 +141,21 @@ df -h /var</code></pre>
         <span class="number">06 — INFORMASI TOKO</span>
         <h2>Tetapkan identitas toko</h2>
         <p>
-          Isi nama toko, domain milik Anda, dan email administrator. Klik
-          <strong>Simpan &amp; lanjutkan</strong>. Periksa ejaan: informasi
-          dikunci setelah pairing. Satu akun seller M1 mengelola satu toko.
+          Isi nama toko, domain, dan IPv4 publik VPS yang akan digunakan.
+          Di panel DNS, arahkan record <strong>A</strong> domain tersebut ke IP VPS.
+          Hapus A lain atau AAAA untuk hostname toko dan pertahankan record email.
+          Jika memakai Cloudflare, pilih mode DNS only selama instalasi.
+          Klik <strong>Periksa DNS</strong> dan tunggu sampai cocok.
+        </p>
+        <p>
+          Isi email administrator, buat password dashboard minimal 12 karakter,
+          lalu ulangi password. Simpan password untuk login. Klik
+          <strong>Simpan &amp; lanjutkan</strong>. Informasi dikunci setelah pairing.
         </p>
         <figure>
           <img
             src="/panduan-instalasi/assets/m1-store.png"
-            alt="UI asli nama, domain, dan email administrator"
+            alt="UI Info Toko dengan pengaturan DNS dan password dashboard"
           />
           <figcaption>
             UI asli Informasi Toko dengan data sintetis lokal.
@@ -202,30 +209,27 @@ df -h /var</code></pre>
         <span class="number">09 — STATUS INSTALASI</span>
         <h2>Pantau operasi nyata</h2>
         <p>
-          Halaman Instalasi menampilkan heartbeat, waktu terakhir, dan tahap
-          aktif dari backend. Tidak ada progress bar berbasis waktu. Runtime
-          disiapkan, DNS/HTTPS diverifikasi, lalu installer resmi menjalankan
-          build, database, admin, dan health check. Urutan mengikuti persyaratan
-          keamanan installer lama.
+          Halaman Instalasi menampilkan satu progress bar dengan persentase.
+          Angka bergerak saat VPS melaporkan tahap instalasi dan mencapai 100%
+          setelah toko lolos pemeriksaan akhir.
         </p>
         <p>
           Build pada VPS 2 GB dapat memerlukan beberapa menit. Tab boleh
-          ditutup. Jika heartbeat berhenti, periksa koneksi dan service. Jika
-          gagal, perbaiki penyebabnya lalu klik
-          <strong>Periksa lagi / lanjutkan</strong>. Jangan menghapus database.
+          ditutup. Jika proses terhenti, ikuti petunjuk di layar lalu klik
+          <strong>Coba lagi</strong>. Jangan menghapus database.
         </p>
       </section>
       <section class="step">
         <span class="number">10 — DNS TOKO</span>
-        <h2>Arahkan domain ke VPS seller</h2>
+        <h2>Jika DNS atau HTTPS tertahan</h2>
         <ol>
           <li>
             Buat A record <code>@</code> menuju IP publik VPS pada wizard.
           </li>
           <li>Koreksi A lain yang menunjuk server berbeda.</li>
-          <li>Koreksi AAAA jika IPv6 tidak tersedia pada VPS.</li>
+          <li>Hapus AAAA untuk hostname toko yang dipasang melalui wizard IPv4.</li>
           <li>Pertahankan MX, SPF, DKIM, DMARC, dan record email.</li>
-          <li>Tunggu propagasi dan klik Periksa lagi.</li>
+          <li>Tunggu propagasi dan klik Coba lagi.</li>
         </ol>
         <pre><code>nslookup tokoceria.com 1.1.1.1
 nslookup tokoceria.com 8.8.8.8</code></pre>
@@ -255,13 +259,11 @@ nslookup tokoceria.com 8.8.8.8</code></pre>
         <h2>Masuk sebagai administrator</h2>
         <p>
           Klik <strong>Buka Dashboard</strong> pada Toko Siap. Gunakan email
-          administrator yang Anda daftarkan. Password acak dibuat hanya di VPS:
+          administrator dan password yang Anda buat di Info Toko.
         </p>
-        <pre><code>sudo cat /etc/btos-agent/admin-password</code></pre>
         <p>
-          Simpan di pengelola password, ubah melalui alur akun aplikasi, dan
-          pastikan login baru berhasil. Hapus salinan password awal setelah
-          akses baru dipastikan. Platform tidak menyimpan password toko.
+          Toko yang dipasang dengan wizard lama masih menampilkan petunjuk
+          untuk mengambil password awal dari terminal VPS.
         </p>
       </section>
       <section class="step">

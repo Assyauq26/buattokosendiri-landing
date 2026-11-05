@@ -37,9 +37,12 @@
         disimpan sebagai hash. Agent yang dijalankan dengan sudo pada VPS seller
         dapat memasang runtime, database, dan aplikasi menggunakan installer
         resmi. Agent mengirim status operasional, versi, IP publik, dan hasil
-        pemeriksaan kesehatan melalui HTTPS. Platform tidak menerima password
-        SSH, private key, password admin toko, atau isi database pelanggan.
-        Password awal administrator dibuat dan disimpan hanya pada VPS seller.
+        pemeriksaan kesehatan melalui HTTPS. Password dashboard awal yang
+        dibuat di Info Toko disimpan dalam bentuk terenkripsi untuk instalasi
+        dan dikirim melalui HTTPS hanya ke agent VPS yang terhubung ke toko.
+        Salinan di database aktif dihapus setelah instalasi selesai atau akses
+        agent dicabut. Cadangan sebelumnya mengikuti masa simpan cadangan.
+        Platform tidak meminta password SSH, private key, atau isi database pelanggan.
       </p>
       <p>
         Seller dapat mencabut komunikasi agent dari wizard. Pencabutan memblokir
