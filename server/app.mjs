@@ -270,7 +270,7 @@ export function createApp({ pool, config, sendMail, checkDns = checkStoreDns }) 
         if (!candidate) reject(410, "Token pairing kedaluwarsa.");
         // Match issuance lock order: store first, then token.
         const { rows: [store] } = await db.query(
-          `SELECT s.id, host(s.vps_ipv4) AS vps_ipv4, u.email FROM stores s JOIN sellers u ON u.id=s.seller_id
+          `SELECT s.id, s.domain, host(s.vps_ipv4) AS vps_ipv4, u.email FROM stores s JOIN sellers u ON u.id=s.seller_id
            WHERE s.id=$1 FOR UPDATE OF s`, [candidate.store_id],
         );
         if (!store || !canSignIn(store.email))
@@ -283,6 +283,8 @@ export function createApp({ pool, config, sendMail, checkDns = checkStoreDns }) 
         );
         if (!pair || pair.expires_at < new Date())
           reject(410, "Token pairing kedaluwarsa.");
+        if (data.existingDomain !== undefined && data.existingDomain !== store.domain)
+          reject(409, "VPS masih menjalankan toko dengan domain lain. Daftarkan domain toko yang sama untuk menyambungkannya kembali.");
         if (pair.consumed_at) {
           const {
             rows: [existing],
@@ -319,8 +321,8 @@ export function createApp({ pool, config, sendMail, checkDns = checkStoreDns }) 
           [id, digest(data.token)],
         );
         await db.query(
-          "INSERT INTO jobs(id,store_id,agent_id,release) VALUES($1,$2,$3,$4)",
-          [randomUUID(), store.id, id, release],
+          "INSERT INTO jobs(id,store_id,agent_id,release,evidence) VALUES($1,$2,$3,$4,$5)",
+          [randomUUID(), store.id, id, release, data.existingDomain === store.domain ? { reattachRequested: true } : {}],
         );
         return { agentId: id, passwordFromWizard: Boolean(store.vps_ipv4) };
       });
@@ -367,6 +369,7 @@ export function createApp({ pool, config, sendMail, checkDns = checkStoreDns }) 
         for (const key of [
           "https",
           "application",
+          "installation",
           "version",
           "source_sha",
           "ipv4",
@@ -390,13 +393,16 @@ export function createApp({ pool, config, sendMail, checkDns = checkStoreDns }) 
             return { ok: true, sequence: job.sequence };
           if (job.state === "complete" || data.sequence !== job.sequence + 1)
             reject(409, "Urutan event tidak valid.");
+          const reattached = evidence.installation === "reattached";
+          const versionVerified = reattached && job.evidence.reattachRequested === true
+            ? /^[a-f0-9]{40}$/.test(evidence.source_sha || "") && /^v\d+\.\d+\.\d+$/.test(evidence.version || "")
+            : evidence.source_sha === job.release.sha && evidence.version === job.release.version;
           if (
             data.state === "complete" &&
             (data.stage !== "complete" ||
               evidence.https !== "PUBLIC_CERTIFICATE_VALID" ||
               evidence.application !== "healthy" ||
-              evidence.source_sha !== job.release.sha ||
-              evidence.version !== job.release.version)
+              !versionVerified)
           )
             reject(422, "Bukti penyelesaian belum lengkap.");
           await db.query(

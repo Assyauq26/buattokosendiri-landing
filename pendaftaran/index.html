@@ -129,9 +129,10 @@
         <section data-panel="3" hidden>
           <h2>Hubungkan VPS Anda</h2>
           <p class="section-description">
-            Gunakan VPS kosong Ubuntu 24.04, minimal 2 vCPU, RAM 2 GB, dan 12 GB
+            Gunakan VPS Ubuntu 24.04, minimal 2 vCPU, RAM 2 GB, dan 12 GB
             ruang kosong. RAM di bawah 4 GB membutuhkan swap sekitar 2 GB.
           </p>
+          <p>Jika VPS sudah menjalankan toko dari installer ini, pakai domain toko yang sama untuk menyambungkan kembali.</p>
           <ol class="instructions">
             <li>
               Masuk melalui <code>ssh USER@IP_VPS</code>, lalu pastikan akun
@@ -223,6 +224,7 @@
             >
           </div>
           <h3>Masuk pertama kali</h3>
+          <p id="reattached-password" hidden>Gunakan akun admin dan password yang sudah berlaku di toko.</p>
           <p id="chosen-password">Masuk dengan email admin dan password yang Anda buat di Info Toko.</p>
           <div id="legacy-password" hidden>
             <p>Untuk instalasi lama, ambil password admin awal dari terminal VPS:</p>

@@ -131,7 +131,7 @@
     $("pair-token").value = r.token;
     $("pairing").hidden = false;
     message(
-      "Token aktif selama 15 menit. Jalankan perintah di VPS kosong Anda.",
+      "Token aktif selama 15 menit. Jalankan perintah di VPS Anda.",
     );
   });
   for (const [id, input] of [
@@ -185,7 +185,7 @@
           ? "Sehat"
           : "Belum terverifikasi",
       ],
-      ["Versi", job.release.version],
+      ["Versi", job.evidence.version || job.release.version],
     ]) {
       const dt = document.createElement("dt"),
         dd = document.createElement("dd");
@@ -195,8 +195,10 @@
     }
     $("open-store").href = "https://" + store.domain;
     $("open-dashboard").href = "https://" + store.domain + "/admin";
-    $("legacy-password").hidden = Boolean(store.vps_ipv4);
-    $("chosen-password").hidden = !store.vps_ipv4;
+    const reattached = job.evidence.installation === "reattached";
+    $("reattached-password").hidden = !reattached;
+    $("legacy-password").hidden = reattached || Boolean(store.vps_ipv4);
+    $("chosen-password").hidden = reattached || !store.vps_ipv4;
   }
   async function refresh() {
     if (!authenticated) return;
@@ -223,13 +225,21 @@
     const online = Date.now() - Date.parse(r.agent.last_seen) < 90000;
     $("install-progress").value = j.progress;
     $("install-percent").textContent = j.progress + "%";
+    const queuedTooLong = Date.now() - Date.parse(j.updated_at) >= 90000;
+    const queuedStatus = !online
+      ? "Agent VPS tidak merespons. Periksa layanan btos-agent di VPS."
+      : queuedTooLong
+        ? "Agent terhubung, tetapi tugas belum mulai. Periksa journal btos-agent atau jalankan bootstrap terbaru di VPS."
+        : "VPS terhubung. Menunggu instalasi dimulai…";
     const status = r.agent.revoked_at ? "Akses instalasi sudah dicabut." : {
-      queued: "VPS terhubung. Menunggu instalasi dimulai…",
+      queued: queuedStatus,
       running: online ? "Sedang menyiapkan toko Anda…" : "Koneksi VPS terputus. Periksa VPS Anda.",
       waiting_dns: "DNS atau HTTPS belum siap. Periksa record A dan pastikan port 80 dan 443 terbuka, lalu coba lagi.",
       failed: j.evidence.error_code === "WRONG_VPS_IP"
         ? "IP publik VPS berubah. Periksa alamat VPS sebelum mencoba lagi."
-        : "Instalasi terhenti. Periksa VPS Anda, lalu coba lagi.",
+        : j.evidence.error_code === "EXISTING_STORE_DOMAIN_MISMATCH"
+          ? "VPS masih menjalankan domain lain. Gunakan domain toko yang sudah terpasang untuk menyambungkan kembali."
+          : "Instalasi terhenti. Periksa VPS Anda, lalu coba lagi.",
     }[j.state];
     if ($("job-state").textContent !== status) $("job-state").textContent = status;
     $("retry").hidden =

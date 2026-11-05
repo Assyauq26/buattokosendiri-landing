@@ -74,7 +74,9 @@ class Reporter:
         self.path = BASE / 'progress.json'
         self.state = read(self.path) if self.path.exists() else {'job': job['id'], 'sequence': job['sequence']}
         if self.state['job'] != job['id']:
-            raise RuntimeError('JOB_ID_CHANGED')
+            # Keep the previous outbox for diagnostics without replaying it into a new job.
+            self.path.rename(BASE / ('progress.previous-' + str(time.time_ns()) + '.json'))
+            self.state = {'job': job['id'], 'sequence': job['sequence']}
 
     def flush(self):
         if self.state.get('pending'):
@@ -91,7 +93,47 @@ class Reporter:
         self.flush()
 
 
+def installed_store():
+    config_dir = Path('/etc/single-store')
+    if not (config_dir / 'installed').is_file():
+        return None
+    state = read(config_dir / 'setup.json')
+    domain = state.get('domain', '')
+    if (not state.get('complete') or state.get('local_test') or not isinstance(domain, str)
+            or not re.fullmatch(r'[a-z0-9.-]{1,253}', domain)
+            or f'APP_ORIGIN=https://{domain}' not in (config_dir / 'runtime.env').read_text().splitlines()):
+        raise RuntimeError('EXISTING_STORE_REQUIRES_OPERATOR')
+    return state
+
+
+def reconnect_store(state, store, report):
+    if state['domain'] != store['domain']:
+        report.event('preflight', 'failed', {'error_code': 'EXISTING_STORE_DOMAIN_MISMATCH'})
+        return
+    report.event('preflight')
+    sys.path.insert(0, '/opt/single-store/manager')
+    core = importlib.import_module('core')
+    if store.get('vps_ipv4') and core.discover_ips()['ipv4'] != store['vps_ipv4']:
+        report.event('dns', 'failed', {'error_code': 'WRONG_VPS_IP'})
+        return
+    version = read(Path('/etc/single-store/version.json'))
+    if not re.fullmatch(r'[a-f0-9]{40}', version.get('source_sha', '')) or not re.fullmatch(r'\d+\.\d+\.\d+', version.get('version', '')):
+        raise RuntimeError('INSTALLATION_IDENTITY_MISMATCH')
+    report.event('health')
+    core.healthy(False)
+    core.public_health(state)
+    report.event('complete', 'complete', {
+        'https': 'PUBLIC_CERTIFICATE_VALID', 'application': 'healthy',
+        'version': 'v' + version['version'], 'source_sha': version['source_sha'],
+        'installation': 'reattached',
+    })
+
+
 def install(config, job, store, report):
+    existing = installed_store()
+    if existing:
+        reconnect_store(existing, store, report)
+        return
     if config.get('passwordFromWizard') and not store.get('vps_ipv4'):
         raise RuntimeError('PLATFORM_WIZARD_PROTOCOL_UNAVAILABLE')
     release = job['release']
@@ -180,8 +222,14 @@ def install(config, job, store, report):
 
 
 def setup():
-    if (Path('/etc/single-store').exists() or Path('/opt/single-store').exists()) and not (BASE / 'config.json').exists():
-        raise RuntimeError('EXISTING_STORE_REQUIRES_OPERATOR')
+    existing = installed_store()
+    if not existing and not (BASE / 'config.json').exists():
+        if any(path.exists() or path.is_symlink() for path in (
+                Path('/etc/single-store'), Path('/opt/single-store'), Path('/var/lib/single-store'))):
+            raise SystemExit('Data instalasi toko lama belum dikenali. Periksa pemulihan instalasi di VPS.')
+        for port in (80, 443, 3000, 8787):
+            if run(['ss', '-H', '-ltn', f'sport = :{port}']):
+                raise SystemExit(f'Port {port} sedang digunakan. Kosongkan port tersebut sebelum memasang toko.')
     for directory in [BASE, WORK]:
         if directory.is_symlink():
             raise RuntimeError('UNSAFE_DIRECTORY')
@@ -196,10 +244,14 @@ def setup():
     ipv4 = run(['curl', '-4', '--noproxy', '*', '--proto', '=https', '-fsS', '--max-time', '8',
                 'https://api.ipify.org'], timeout=10)
     try:
-        result = api(config, 'pair', {'token': pairing, 'credential': config['credential'], 'protocol': 2, 'ipv4': ipv4})
+        request = {'token': pairing, 'credential': config['credential'], 'protocol': 2, 'ipv4': ipv4}
+        if existing:
+            request['existingDomain'] = existing['domain']
+        result = api(config, 'pair', request)
     except urllib.error.HTTPError as error:
-        if error.code == 409:
-            raise SystemExit('Pairing ditolak. Pastikan IP publik VPS sesuai dengan Info Toko dan gunakan token terbaru.')
+        if error.code in (409, 410, 422):
+            detail = json.load(error).get('error')
+            raise SystemExit(detail if isinstance(detail, str) else 'Pairing ditolak oleh platform.')
         raise
     if not isinstance(result.get('passwordFromWizard'), bool):
         raise SystemExit('Platform belum mendukung wizard terbaru. Coba lagi setelah platform siap.')

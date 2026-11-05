@@ -268,6 +268,26 @@ test("OTP, sessions, tenant boundaries, pairing and durable completion", async (
   await req("/logout", {}, { Cookie: alice });
   assert.equal((await req("/session", null, { Cookie: alice })).status, 401);
 });
+test("pairing can reconnect a healthy installation for the same domain", async () => {
+  const cookie = await login("reconnect@example.com");
+  const domain = "reconnect.example.com";
+  assert.equal((await req("/store", { ...setup, name: "Toko Lama", domain, adminEmail: "reconnect@example.com" }, { Cookie: cookie })).status, 200);
+  const pairing = await req("/pairing", {}, { Cookie: cookie });
+  const credential = randomBytes(32).toString("hex");
+  const data = { token: pairing.body.token, credential, protocol: 2, ipv4: setup.vpsIpv4 };
+  assert.equal((await req("/agent/pair", { ...data, existingDomain: "different.example.com" })).status, 409);
+  assert.equal((await req("/store", null, { Cookie: cookie })).body.job, null);
+  assert.equal((await req("/agent/pair", { ...data, existingDomain: domain })).status, 200);
+  const auth = { Authorization: "Bearer " + credential };
+  const { job } = (await req("/agent/job", null, auth)).body;
+  const evidence = { https: "PUBLIC_CERTIFICATE_VALID", application: "healthy", version: "v0.9.0", source_sha: "b".repeat(40) };
+  const complete = { jobId: job.id, sequence: 1, stage: "complete", state: "complete" };
+  assert.equal((await req("/agent/event", { ...complete, evidence }, auth)).status, 422);
+  assert.equal((await req("/agent/event", { ...complete, evidence: { ...evidence, installation: "reattached" } }, auth)).status, 200);
+  const result = (await req("/store", null, { Cookie: cookie })).body.job;
+  assert.equal(result.progress, 100);
+  assert.equal(result.evidence.version, "v0.9.0");
+});
 test("wrong OTP increments persist, lockout, expiry and request cooldown", async () => {
   const c = await req("/otp/request", {
     email: "wrong@example.com",
