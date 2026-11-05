@@ -25,9 +25,12 @@ Konfigurasi platform berada di /etc/btos-platform. Isi RESEND_API_KEY dan
 RESEND_FROM di runtime.env lewat editor sudo pada server, dari secret dan
 alamat pengirim yang sudah diverifikasi. Jangan menyalin secret melalui chat
 atau ke Git. Buat ulang container app untuk menerapkan env. Daftar rilis
-approved-releases.json berisi array {repository,version,sha,approved}. Masukkan
+pilot-releases.json berisi array {repository,version,sha,approved}. Masukkan
 hanya tag semver rilis publik yang disetujui, commit penuh yang cocok, dan
-approved=true. Array kosong menutup bootstrap dan pairing dengan aman.
+approved=true. Array kosong menutup bootstrap dan pairing dengan aman. Biarkan
+approved-releases.json lama kosong agar rollback ke versi sebelum pembatasan
+pilot tidak membuka installer. Set INSTALLER_TEST_EMAILS ke daftar alamat uji
+yang dipisahkan koma. SELLER_PILOT_ONLY=1 juga membatasi OTP dan session.
 Uji pengiriman OTP ke kotak masuk berizin serta instalasi pada VPS disposable
 yang kosong dan domain uji berizin sebelum rilis dibuka ke seller.
 
@@ -60,7 +63,9 @@ Caddyfile.production adalah fragmen vhost. Jangan mengganti Caddyfile Hubify.
 Cadangkan file routing dengan izin root. Hubungkan proxy yang ada ke jaringan
 web platform saat integrasi routing diotorisasi, validasi gabungan dengan
 caddy validate, reload, lalu pastikan Hubify tetap sehat. Atur TRUST_PROXY=1
-hanya setelah forwarding dari proxy tepercaya diverifikasi. Pertahankan
+hanya bersama TRUST_PROXY_IP yang persis cocok dengan alamat Caddy pada
+jaringan web platform. Verifikasi alamat dan header yang ditulis ulang Caddy.
+Pertahankan
 bind localhost selama verifikasi. Gunakan curl --resolve dengan TLS valid
 untuk menguji Host/SNI ke Tencent sebelum perubahan DNS jika sertifikat tersedia.
 
@@ -70,3 +75,22 @@ HTTPS, landing, wizard, OTP, PDF, serta Hubify. Jika gagal, kembalikan A @
 ke 43.173.21.197, konfirmasi Helipod tetap dapat melayani, lalu batalkan routing
 platform dengan snapshot setelah perubahan DNS terpropagasi. Pertahankan backup
 registrasi lama dan evaluasi konsistensi data yang ditulis selama cutover.
+
+## Data Helipod dan aktivasi admin
+
+Audit baca-saja menemukan tiga entri di registration.entries, dua akun di
+installer.sellers, dan satu baris di installer.installations. Ada satu kelompok
+email pendaftaran berulang setelah normalisasi. Entri lama menyimpan UUID,
+referensi, kontak, profil toko, status, waktu, dan versi persetujuan.
+
+Pertahankan basis data Helipod dan backup terpisah selama rollback. Jika perlu
+memindahkan riwayat, ekspor snapshot konsisten dan impor ke skema arsip terpisah
+dengan kunci UUID sumber. Cocokkan jumlah baris, referensi unik, kelompok email
+dan timestamp sebelum mengaktifkan akses operator. Pertahankan seluruh entri
+yang berbagi email. Jangan ubah entri menjadi akun M1 atau menyalin session,
+kredensial agent, maupun persetujuan ke tabel autentikasi. Seller tetap
+memverifikasi email melalui OTP. Rollback arsip tidak menyentuh akun M1.
+
+Aktivasi administrator memakai password awal acak yang disimpan root-only di
+VPS seller. Aktivasi sekali pakai melalui HTTPS toko adalah pekerjaan lanjutan
+setelah installer dan pemulihan lokal terverifikasi.

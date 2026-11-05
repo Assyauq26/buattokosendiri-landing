@@ -24,7 +24,7 @@ services:
       PORT: '8080'
       RELEASE_MANIFEST: /run/platform/approved-releases.json
     volumes:
-      - /etc/btos-platform/approved-releases.json:/run/platform/approved-releases.json:ro
+      - /etc/btos-platform/pilot-releases.json:/run/platform/approved-releases.json:ro
     ports: ['127.0.0.1:8088:8080']
     networks: [database, web]
     depends_on:

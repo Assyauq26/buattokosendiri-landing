@@ -10,6 +10,7 @@ import {
 import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { isIP } from "node:net";
 const ROOT = fileURLToPath(new URL("../", import.meta.url));
 export const STAGES = [
   "preflight",
@@ -59,6 +60,8 @@ function domain(value) {
   return value;
 }
 export function createApp({ pool, config, sendMail }) {
+  const installerTestEmails = config.installerTestEmails || [];
+  const canSignIn = (email) => !config.sellerPilotOnly || installerTestEmails.includes(email);
   const mac = (value) =>
     createHmac("sha256", config.secret).update(value).digest("hex");
   const cookieName = config.local ? "btos_session" : "__Host-btos_session";
@@ -104,6 +107,7 @@ export function createApp({ pool, config, sendMail }) {
       [digest(raw)],
     );
     if (!user) reject(401, "Silakan masuk menggunakan OTP email.");
+    if (!canSignIn(user.email)) reject(403, "Pendaftaran terbatas untuk akun uji.");
     return user;
   }
   async function agent(req) {
@@ -113,8 +117,9 @@ export function createApp({ pool, config, sendMail }) {
     const {
       rows: [row],
     } = await pool.query(
-      "UPDATE agents SET last_seen=now() WHERE digest=$1 AND revoked_at IS NULL RETURNING *",
-      [digest(raw)],
+      `UPDATE agents a SET last_seen=now() FROM stores s JOIN sellers u ON u.id=s.seller_id
+       WHERE a.digest=$1 AND a.revoked_at IS NULL AND a.store_id=s.id AND u.email=ANY($2::text[]) RETURNING a.*`,
+      [digest(raw), installerTestEmails],
     );
     if (!row) reject(401, "Otorisasi agent tidak valid.");
     return row;
@@ -143,12 +148,9 @@ export function createApp({ pool, config, sendMail }) {
   }
   async function api(req, url, data, reply) {
     const route = url.pathname.replace("/api/platform", "");
-    const ip = config.trustProxy
-      ? (req.headers["x-forwarded-for"] || req.socket.remoteAddress)
-          .split(",")
-          .at(-1)
-          .trim()
-      : req.socket.remoteAddress;
+    const peer = req.socket.remoteAddress.replace(/^::ffff:/, "");
+    const forwarded = req.headers["x-forwarded-for"]?.split(",").at(-1).trim();
+    const ip = peer === config.trustedProxyIp && isIP(forwarded || "") ? forwarded : peer;
     if (route === "/health" && req.method === "GET") {
       await pool.query("SELECT 1");
       return reply(200, {
@@ -167,6 +169,7 @@ export function createApp({ pool, config, sendMail }) {
       if (data.consent !== CONSENT)
         reject(422, "Setujui kebijakan privasi terbaru.");
       const address = email(data.email);
+      if (!canSignIn(address)) reject(403, "Pendaftaran terbatas untuk akun uji.");
       await rate("otp-ip:" + ip, 12, 3600);
       await rate("otp-email:" + address, 5, 3600);
       await rate("otp-cooldown:" + address, 1, 60);
@@ -204,6 +207,7 @@ export function createApp({ pool, config, sendMail }) {
         );
         if (
           !otp ||
+          !canSignIn(otp.email) ||
           otp.consumed_at ||
           otp.attempts >= 5 ||
           otp.expires_at < new Date()
@@ -248,11 +252,23 @@ export function createApp({ pool, config, sendMail }) {
       )
         reject(422, "Token pairing tidak valid.");
       const result = await tx(async (db) => {
+        const tokenDigest = digest(data.token);
+        const { rows: [candidate] } = await db.query(
+          "SELECT store_id FROM pairings WHERE digest=$1", [tokenDigest],
+        );
+        if (!candidate) reject(410, "Token pairing kedaluwarsa.");
+        // Match issuance lock order: store first, then token.
+        const { rows: [store] } = await db.query(
+          `SELECT s.id, u.email FROM stores s JOIN sellers u ON u.id=s.seller_id
+           WHERE s.id=$1 FOR UPDATE OF s`, [candidate.store_id],
+        );
+        if (!store || !installerTestEmails.includes(store.email))
+          reject(403, "Instalasi terbatas untuk akun uji yang diotorisasi.");
         const {
           rows: [pair],
         } = await db.query(
           "SELECT * FROM pairings WHERE digest=$1 FOR UPDATE",
-          [digest(data.token)],
+          [tokenDigest],
         );
         if (!pair || pair.expires_at < new Date())
           reject(410, "Token pairing kedaluwarsa.");
@@ -266,11 +282,6 @@ export function createApp({ pool, config, sendMail }) {
           if (!existing) reject(409, "Token pairing telah dipakai.");
           return { agentId: existing.id };
         }
-        const {
-          rows: [store],
-        } = await db.query("SELECT * FROM stores WHERE id=$1 FOR UPDATE", [
-          pair.store_id,
-        ]);
         const {
           rows: [existing],
         } = await db.query("SELECT id FROM agents WHERE store_id=$1", [
@@ -459,6 +470,8 @@ export function createApp({ pool, config, sendMail }) {
           503,
           "Installer belum dibuka: operator perlu menetapkan rilis yang disetujui.",
         );
+      if (!installerTestEmails.includes(user.email))
+        reject(403, "Instalasi terbatas untuk akun uji yang diotorisasi.");
       const raw = token();
       await tx(async (db) => {
         const {

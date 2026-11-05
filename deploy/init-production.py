@@ -11,6 +11,11 @@ if root.exists():
     required = ['runtime.env', 'postgres.env', 'migration.env', 'init.sql', 'approved-releases.json', 'initialized']
     if not all((root / name).is_file() for name in required):
         raise SystemExit('Partial config: operator must inspect; never regenerate credentials')
+    pilot = root / 'pilot-releases.json'
+    if not pilot.exists():
+        with pilot.open('x') as file:
+            file.write('[]\n')
+        os.chmod(pilot, 0o644)
     print('Existing platform secrets preserved')
     raise SystemExit(0)
 root.mkdir(mode=0o700)
@@ -21,9 +26,10 @@ files = {
     'runtime.env': f'APP_ORIGIN=https://buattokosendiri.web.id\nDATABASE_URL=postgresql://platform_app:{app}@db:5432/platform\nAUTH_SECRET={secret}\nRESEND_API_KEY=\nRESEND_FROM=\nTRUST_PROXY=0\n',
     'init.sql': f"CREATE ROLE platform_app LOGIN PASSWORD '{app}' NOSUPERUSER NOCREATEDB NOCREATEROLE;\nREVOKE CREATE ON SCHEMA public FROM PUBLIC;\nREVOKE CONNECT ON DATABASE platform FROM PUBLIC;\nGRANT CONNECT ON DATABASE platform TO platform_app;\n",
     'approved-releases.json': '[]\n',
+    'pilot-releases.json': '[]\n',
     'initialized': 'platform-m1\n',
 }
 for name, text in files.items():
     (root / name).write_text(text)
-    os.chmod(root / name, 0o644 if name in ['init.sql', 'approved-releases.json'] else 0o600)
+    os.chmod(root / name, 0o644 if name in ['init.sql', 'approved-releases.json', 'pilot-releases.json'] else 0o600)
 print('Platform-only secrets generated. OTP and installer remain disabled until configured.')

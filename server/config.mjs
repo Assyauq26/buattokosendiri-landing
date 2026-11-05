@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { isIP } from "node:net";
 export function config(env = process.env) {
   const origin = env.APP_ORIGIN || "https://buattokosendiri.web.id";
   const local = env.LOCAL_DEVELOPMENT === "1";
@@ -14,6 +15,18 @@ export function config(env = process.env) {
   const releases = env.RELEASE_MANIFEST
     ? JSON.parse(readFileSync(env.RELEASE_MANIFEST, "utf8"))
     : [];
+  const installerTestEmails = (env.INSTALLER_TEST_EMAILS || "")
+    .split(",")
+    .map((email) => email.trim().toLowerCase())
+    .filter(Boolean);
+  if (installerTestEmails.some((email) => !/^[^\s@,]+@[^\s@,]+\.[^\s@,]+$/.test(email)))
+    throw Error("Invalid installer test account allowlist");
+  const sellerPilotOnly = env.SELLER_PILOT_ONLY === "1";
+  if ((releases.length || sellerPilotOnly) && !installerTestEmails.length)
+    throw Error("Pilot requires a test account allowlist");
+  const trustedProxyIp = env.TRUST_PROXY === "1" ? env.TRUST_PROXY_IP : undefined;
+  if (env.TRUST_PROXY === "1" && !isIP(trustedProxyIp || ""))
+    throw Error("TRUST_PROXY_IP must identify the reverse proxy");
   for (const r of releases) {
     if (
       !/^v\d+\.\d+\.\d+$/.test(r.version) ||
@@ -31,8 +44,10 @@ export function config(env = process.env) {
     resendKey: env.RESEND_API_KEY,
     resendFrom: env.RESEND_FROM,
     releases,
+    installerTestEmails,
+    sellerPilotOnly,
     port: Number(env.PORT || 8080),
     host: env.BIND_HOST || "127.0.0.1",
-    trustProxy: env.TRUST_PROXY === "1",
+    trustedProxyIp,
   };
 }
