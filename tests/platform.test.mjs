@@ -7,6 +7,12 @@ import { createApp, CONSENT } from "../server/app.mjs";
 import { config } from "../server/config.mjs";
 const pool = new pg.Pool({ connectionString: process.env.TEST_DATABASE_URL });
 const sent = new Map();
+const setup = {
+  vpsIpv4: "8.8.4.4",
+  adminPassword: "Local-test-password-2026!",
+  adminPasswordConfirmation: "Local-test-password-2026!",
+};
+let dnsStatus = "ready";
 let app, origin, base;
 const release = {
   repository: "Assyauq26/buattokoonline",
@@ -38,6 +44,7 @@ before(async () => {
   app = createApp({
     pool,
     config: cfg,
+    checkDns: async () => dnsStatus,
     sendMail: async (address, code, id) => sent.set(id, { address, code }),
   });
   await new Promise((r) => app.listen(18181, "127.0.0.1", r));
@@ -99,6 +106,13 @@ test("OTP, sessions, tenant boundaries, pairing and durable completion", async (
   );
   const bob = await login("bob@example.com");
   assert.equal((await req("/pairing", {}, { Cookie: bob })).status, 403);
+  const info = { name: "Toko Alice", domain: "alice.example.com", adminEmail: "alice@example.com", ...setup };
+  dnsStatus = "pending";
+  assert.equal((await req("/store/dns", info, { Cookie: alice })).body.ready, false);
+  assert.equal((await req("/store", info, { Cookie: alice })).status, 422);
+  dnsStatus = "ready";
+  assert.equal((await req("/store/dns", info, { Cookie: alice })).body.ready, true);
+  assert.equal((await req("/store", { ...info, adminPasswordConfirmation: "wrong" }, { Cookie: alice })).status, 422);
   assert.equal(
     (
       await req(
@@ -107,6 +121,7 @@ test("OTP, sessions, tenant boundaries, pairing and durable completion", async (
           name: "Toko Alice",
           domain: "alice.example.com",
           adminEmail: "alice@example.com",
+          ...setup,
         },
         { Cookie: alice },
       )
@@ -122,6 +137,7 @@ test("OTP, sessions, tenant boundaries, pairing and durable completion", async (
           name: "Toko Bob",
           domain: "alice.example.com",
           adminEmail: "bob@example.com",
+          ...setup,
         },
         { Cookie: bob },
       )
@@ -149,7 +165,9 @@ test("OTP, sessions, tenant boundaries, pairing and durable completion", async (
     "secret absent from shell command",
   );
   const credential = randomBytes(32).toString("hex");
-  const data = { token: pairing.body.token, credential };
+  const data = { token: pairing.body.token, credential, protocol: 2, ipv4: setup.vpsIpv4 };
+  assert.equal((await req("/agent/pair", { ...data, protocol: 1 })).status, 409);
+  assert.equal((await req("/agent/pair", { ...data, ipv4: "8.8.8.8" })).status, 409);
   assert.equal((await req("/agent/pair", data)).status, 200);
   assert.equal(
     (await req("/agent/pair", data)).status,
@@ -173,6 +191,7 @@ test("OTP, sessions, tenant boundaries, pairing and durable completion", async (
           name: "Changed",
           domain: "other.example.com",
           adminEmail: "alice@example.com",
+          ...setup,
         },
         { Cookie: alice },
       )
@@ -185,6 +204,13 @@ test("OTP, sessions, tenant boundaries, pairing and durable completion", async (
   assert.equal(payload.status, 200);
   const job = payload.body.job;
   assert.equal(job.release.sha, release.sha);
+  const sellerStore = (await req("/store", null, { Cookie: alice })).body.store;
+  assert.equal(sellerStore.admin_password_sealed, undefined);
+  assert.equal(payload.body.store.admin_password_sealed, undefined);
+  assert.equal((await req("/agent/admin-password", null, { Cookie: alice })).status, 401);
+  assert.equal((await req("/agent/admin-password", null, auth)).status, 409);
+  const sealed = (await pool.query("SELECT admin_password_sealed FROM stores WHERE id=$1", [sellerStore.id])).rows[0].admin_password_sealed;
+  assert.ok(sealed && !sealed.includes(setup.adminPassword));
   assert.equal(
     (
       await req(
@@ -202,9 +228,17 @@ test("OTP, sessions, tenant boundaries, pairing and durable completion", async (
     422,
     "success requires evidence",
   );
+  const reportStage = (stage, sequence, state = "running") =>
+    req("/agent/event", { jobId: job.id, stage, sequence, state }, auth);
+  assert.equal((await reportStage("https", 1)).status, 200);
+  assert.equal((await req("/agent/admin-password", null, auth)).body.password, setup.adminPassword);
+  assert.equal((await reportStage("database", 2)).status, 200);
+  assert.equal((await req("/store", null, { Cookie: alice })).body.job.progress, 72);
+  assert.equal((await reportStage("preflight", 3, "failed")).status, 200);
+  assert.equal((await req("/store", null, { Cookie: alice })).body.job.progress, 72);
   const complete = {
     jobId: job.id,
-    sequence: 1,
+    sequence: 4,
     stage: "complete",
     state: "complete",
     evidence: {
@@ -223,6 +257,9 @@ test("OTP, sessions, tenant boundaries, pairing and durable completion", async (
   );
   const state = await req("/store", null, { Cookie: alice });
   assert.equal(state.body.job.state, "complete");
+  assert.equal(state.body.job.progress, 100);
+  assert.equal((await req("/agent/admin-password", null, auth)).status, 409);
+  assert.equal((await pool.query("SELECT admin_password_sealed FROM stores WHERE id=$1", [sellerStore.id])).rows[0].admin_password_sealed, null);
   assert.equal(state.body.job.evidence.password, undefined);
   assert.equal((await req("/store", null, { Cookie: bob })).body.store, null);
   assert.equal((await req("/revoke", {}, { Cookie: alice })).status, 200);

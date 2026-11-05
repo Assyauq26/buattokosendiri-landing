@@ -92,6 +92,8 @@ class Reporter:
 
 
 def install(config, job, store, report):
+    if config.get('passwordFromWizard') and not store.get('vps_ipv4'):
+        raise RuntimeError('PLATFORM_WIZARD_PROTOCOL_UNAVAILABLE')
     release = job['release']
     validate_release(release)
     source = WORK / ('source-' + release['sha'])
@@ -126,6 +128,11 @@ def install(config, job, store, report):
         core.atomic_json(core.STATE, state)
         core.create_secrets(domain)
         report.event('dns')
+        if store.get('vps_ipv4'):
+            actual_ip = core.discover_ips()['ipv4']
+            if actual_ip != store['vps_ipv4']:
+                report.event('dns', 'failed', {'ipv4': actual_ip, 'error_code': 'WRONG_VPS_IP'})
+                return
         status, evidence = core.verify_domain(state)
         state.update(status=status, evidence=evidence)
         core.atomic_json(core.STATE, state)
@@ -134,14 +141,18 @@ def install(config, job, store, report):
                 {'ipv4': state.get('ips', {}).get('ipv4', ''), 'error_code': 'CHECK_DNS_AND_PORTS'})
             return
         report.event('https', evidence={'https': evidence['https'], 'ipv4': state['ips']['ipv4']})
-        password_path = BASE / 'admin-password'
-        if not password_path.exists():
-            fd = os.open(password_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-            with os.fdopen(fd, 'w') as out:
-                out.write('Bt!' + secrets.token_urlsafe(24))
-                out.flush()
-                os.fsync(out.fileno())
-        password = password_path.read_text()
+        if store.get('vps_ipv4'):
+            password = api(config, 'admin-password')['password']
+        else:
+            # Jobs paired before the Info Toko password flow keep their recovery path.
+            password_path = BASE / 'admin-password'
+            if not password_path.exists():
+                fd = os.open(password_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+                with os.fdopen(fd, 'w') as out:
+                    out.write('Bt!' + secrets.token_urlsafe(24))
+                    out.flush()
+                    os.fsync(out.fileno())
+            password = password_path.read_text()
         core.validate_admin(store['admin_email'], password, password)
         state.update(bootstrap_started=True, step=3, verified_at=int(time.time()))
         core.atomic_json(core.STATE, state)
@@ -182,9 +193,19 @@ def setup():
     pairing = getpass.getpass('Token pairing dari wizard (input disembunyikan): ')
     if not re.fullmatch('[a-f0-9]{64}', pairing):
         raise RuntimeError('INVALID_PAIRING_TOKEN')
-    api(config, 'pair', {'token': pairing, 'credential': config['credential']})
-    print('Pairing berhasil. Pantau wizard. Password admin hanya tersimpan di VPS:')
-    print('sudo cat /etc/btos-agent/admin-password')
+    ipv4 = run(['curl', '-4', '--noproxy', '*', '--proto', '=https', '-fsS', '--max-time', '8',
+                'https://api.ipify.org'], timeout=10)
+    try:
+        result = api(config, 'pair', {'token': pairing, 'credential': config['credential'], 'protocol': 2, 'ipv4': ipv4})
+    except urllib.error.HTTPError as error:
+        if error.code == 409:
+            raise SystemExit('Pairing ditolak. Pastikan IP publik VPS sesuai dengan Info Toko dan gunakan token terbaru.')
+        raise
+    if not isinstance(result.get('passwordFromWizard'), bool):
+        raise SystemExit('Platform belum mendukung wizard terbaru. Coba lagi setelah platform siap.')
+    config['passwordFromWizard'] = result['passwordFromWizard']
+    save(config_path, config)
+    print('VPS terhubung. Kembali ke wizard untuk memantau instalasi.')
 
 
 def main():

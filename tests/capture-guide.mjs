@@ -1,6 +1,7 @@
 // Real UI screenshots on an isolated local database. Mail is a local test adapter.
 import { createRequire } from "node:module";
 import { readFileSync, mkdirSync } from "node:fs";
+import { randomBytes } from "node:crypto";
 import pg from "pg";
 import { createApp } from "../server/app.mjs";
 const require = createRequire(import.meta.url);
@@ -15,6 +16,7 @@ await pool.query(
   "TRUNCATE sellers,otp_challenges,sessions,rate_limits,stores,agents,pairings,jobs,job_events CASCADE",
 );
 let code;
+const release = { repository: "Assyauq26/buattokoonline", version: "v1.0.0", sha: "a".repeat(40), approved: true };
 const origin = "http://127.0.0.1:18182";
 const app = createApp({
   pool,
@@ -22,8 +24,10 @@ const app = createApp({
     origin,
     local: true,
     secret: "capture-local-only-".repeat(3),
-    releases: [],
+    releases: [release],
+    installerTestEmails: ["rani@example.com"],
   },
+  checkDns: async () => "ready",
   sendMail: async (_email, value) => {
     code = value;
   },
@@ -55,10 +59,14 @@ try {
   await page.locator('[data-panel="2"]').waitFor({ state: "visible" });
   await page.locator("#store-name").fill("Toko Ceria");
   await page.locator("#domain").fill("tokoceria.example.com");
+  await page.locator("#vps-ipv4").fill("203.0.113.10");
   await page.screenshot({
     path: "panduan-instalasi/assets/m1-store.png",
     fullPage: true,
   });
+  await page.locator("#vps-ipv4").fill("8.8.4.4");
+  await page.locator("#admin-password").fill("Capture-test-only-2026!");
+  await page.locator("#admin-password-confirmation").fill("Capture-test-only-2026!");
   await page.getByRole("button", { name: "Simpan & lanjutkan" }).click();
   await page.locator('[data-panel="3"]').waitFor({ state: "visible" });
   await page.screenshot({
@@ -66,9 +74,22 @@ try {
     fullPage: true,
   });
   await page.getByRole("button", { name: "Buat perintah pairing" }).click();
-  await page.locator("#error").waitFor({ state: "visible" });
-  if (!(await page.locator("#error").innerText()).includes("rilis"))
-    throw Error("Unapproved installer must be blocked");
+  await page.locator("#pairing").waitFor({ state: "visible" });
+  const credential = randomBytes(32).toString("hex");
+  async function agent(path, body) {
+    const response = await fetch(origin + "/api/platform/agent/" + path, {
+      method: body ? "POST" : "GET",
+      headers: { Authorization: "Bearer " + credential, "Content-Type": "application/json" },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    if (!response.ok) throw Error("Local agent " + path + " returned " + response.status);
+    return response.json();
+  }
+  await agent("pair", { credential, token: await page.locator("#pair-token").inputValue(), protocol: 2, ipv4: "8.8.4.4" });
+  const { job } = await agent("job");
+  await agent("event", { jobId: job.id, stage: "database", state: "running", sequence: 1 });
+  await page.getByRole("progressbar", { name: "Progres instalasi" }).waitFor({ state: "visible" });
+  if (await page.locator("#install-percent").textContent() !== "72%") throw Error("Unexpected progress");
   await page.setViewportSize({ width: 390, height: 844 });
   mkdirSync(".local/ui", { recursive: true });
   await page.screenshot({ path: ".local/ui/mobile.png", fullPage: true });
@@ -77,6 +98,12 @@ try {
   )
     throw Error("Mobile overflow");
   if (errors.length) throw Error(errors.join("\n"));
+  await agent("event", {
+    jobId: job.id, stage: "complete", state: "complete", sequence: 2,
+    evidence: { https: "PUBLIC_CERTIFICATE_VALID", application: "healthy", version: release.version, source_sha: release.sha },
+  });
+  await page.locator("#chosen-password").waitFor({ state: "visible" });
+  if (await page.locator("#legacy-password").isVisible()) throw Error("Unexpected legacy password instructions");
   if (process.env.GENERATE_PDF === "1") {
     await page.setViewportSize({ width: 1100, height: 900 });
     await page.goto(origin + "/panduan-instalasi/");
@@ -96,7 +123,7 @@ try {
     });
   }
   console.log(
-    "Real UI: email → OTP → store → pairing; unavailable release blocked; mobile layout checked.",
+    "Real UI: email → OTP → store → pairing → progress → dashboard; mobile layout checked.",
   );
 } finally {
   await browser.close();

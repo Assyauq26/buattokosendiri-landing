@@ -6,17 +6,6 @@
     current = null,
     busy = false,
     editing = false;
-  const stages = {
-    preflight: "Preflight VPS",
-    runtime: "Persiapan runtime",
-    dns: "Pemeriksaan DNS",
-    https: "Verifikasi HTTPS",
-    database: "Database & migrasi",
-    application: "Deployment aplikasi",
-    admin: "Pembuatan administrator",
-    health: "Health check",
-    complete: "Penyelesaian",
-  };
   function message(text, error = false) {
     const el = $(error ? "error" : "notice");
     el.textContent = text;
@@ -92,14 +81,42 @@
       await restore();
     });
   });
+  const dnsInput = () => ({ domain: $("domain").value.trim().toLowerCase(), vpsIpv4: $("vps-ipv4").value.trim() });
+  function showDnsTarget() {
+    const { domain, vpsIpv4 } = dnsInput();
+    $("dns-host").textContent = domain || "domain toko";
+    $("dns-target").textContent = vpsIpv4 || "IP publik VPS";
+    $("dns-result").textContent = "";
+  }
+  for (const id of ["domain", "vps-ipv4"]) $(id).addEventListener("input", showDnsTarget);
+  bind("check-dns", async () => {
+    if (!$("domain").reportValidity() || !$("vps-ipv4").reportValidity()) return;
+    const input = dnsInput();
+    $("dns-result").textContent = "Sedang memeriksa DNS…";
+    try {
+      const result = await api("/store/dns", input);
+      if (JSON.stringify(input) === JSON.stringify(dnsInput()))
+        $("dns-result").textContent = result.message;
+    } catch (error) {
+      $("dns-result").textContent = "";
+      throw error;
+    }
+  });
   $("store-form").addEventListener("submit", (e) => {
     e.preventDefault();
     action(async () => {
       await api("/store", {
         name: $("store-name").value.trim(),
-        domain: $("domain").value.trim().toLowerCase(),
+        ...dnsInput(),
         adminEmail: $("admin-email").value.trim(),
+        adminPassword: $("admin-password").value,
+        adminPasswordConfirmation: $("admin-password-confirmation").value,
       });
+      $("admin-password").value = "";
+      $("admin-password-confirmation").value = "";
+      $("pair-token").value = "";
+      $("command").value = "";
+      $("pairing").hidden = true;
       editing = false;
       await refresh();
     });
@@ -178,12 +195,14 @@
     }
     $("open-store").href = "https://" + store.domain;
     $("open-dashboard").href = "https://" + store.domain + "/admin";
+    $("legacy-password").hidden = Boolean(store.vps_ipv4);
+    $("chosen-password").hidden = !store.vps_ipv4;
   }
   async function refresh() {
     if (!authenticated) return;
     const r = await api("/store");
     current = r;
-    if (!r.store) {
+    if (!r.store || (!r.agent && !r.store.vps_ipv4)) {
       panel(2);
       return;
     }
@@ -201,41 +220,21 @@
       results(r.store, j);
       return;
     }
-    $("install-name").textContent = r.store.name;
-    $("install-domain").textContent = r.store.domain;
     const online = Date.now() - Date.parse(r.agent.last_seen) < 90000;
-    $("agent-status").textContent = r.agent.revoked_at
-      ? "Akses dicabut"
-      : online
-        ? "Terhubung"
-        : "Belum ada heartbeat terbaru — periksa koneksi VPS";
-    $("last-update").textContent = new Date(j.updated_at).toLocaleString(
-      "id-ID",
-    );
-    $("job-state").textContent =
-      {
-        queued: "Menunggu agent mengambil pekerjaan.",
-        running: "Sedang menjalankan: " + stages[j.stage],
-        waiting_dns:
-          "Menunggu DNS atau HTTPS. Periksa pengaturan, lalu klik Periksa lagi.",
-        failed:
-          "Operasi terhenti. Periksa VPS dan log installer, lalu lanjutkan.",
-      }[j.state] || j.state;
-    $("vps-ip").textContent = j.evidence.ipv4 || "yang diberikan penyedia VPS";
+    $("install-progress").value = j.progress;
+    $("install-percent").textContent = j.progress + "%";
+    const status = r.agent.revoked_at ? "Akses instalasi sudah dicabut." : {
+      queued: "VPS terhubung. Menunggu instalasi dimulai…",
+      running: online ? "Sedang menyiapkan toko Anda…" : "Koneksi VPS terputus. Periksa VPS Anda.",
+      waiting_dns: "DNS atau HTTPS belum siap. Periksa record A dan pastikan port 80 dan 443 terbuka, lalu coba lagi.",
+      failed: j.evidence.error_code === "WRONG_VPS_IP"
+        ? "IP publik VPS berubah. Periksa alamat VPS sebelum mencoba lagi."
+        : "Instalasi terhenti. Periksa VPS Anda, lalu coba lagi.",
+    }[j.state];
+    if ($("job-state").textContent !== status) $("job-state").textContent = status;
     $("retry").hidden =
       !["waiting_dns", "failed"].includes(j.state) || !!r.agent.revoked_at;
     $("revoke").hidden = !!r.agent.revoked_at;
-    $("stages").replaceChildren();
-    for (const [key, label] of Object.entries(stages)) {
-      const li = document.createElement("li");
-      li.dataset.active = String(key === j.stage);
-      li.textContent = label;
-      const hint = document.createElement("small");
-      hint.textContent =
-        key === j.stage ? "Status terakhir dari agent" : "Tahap instalasi";
-      li.append(hint);
-      $("stages").append(li);
-    }
   }
   async function restore() {
     try {
@@ -248,8 +247,10 @@
       if (r.store) {
         $("store-name").value = r.store.name;
         $("domain").value = r.store.domain;
+        $("vps-ipv4").value = r.store.vps_ipv4 || "";
         $("admin-email").value = r.store.admin_email;
       }
+      showDnsTarget();
       await refresh();
     } catch (e) {
       if (e.status === 401) {

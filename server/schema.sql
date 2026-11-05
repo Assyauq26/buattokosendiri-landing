@@ -19,6 +19,8 @@ CREATE TABLE IF NOT EXISTS stores (
  id uuid PRIMARY KEY, seller_id uuid NOT NULL UNIQUE REFERENCES sellers(id), name text NOT NULL,
  domain text NOT NULL UNIQUE, admin_email text NOT NULL, created_at timestamptz NOT NULL DEFAULT now()
 );
+ALTER TABLE stores ADD COLUMN IF NOT EXISTS vps_ipv4 inet;
+ALTER TABLE stores ADD COLUMN IF NOT EXISTS admin_password_sealed text;
 CREATE TABLE IF NOT EXISTS agents (
  id uuid PRIMARY KEY, store_id uuid NOT NULL UNIQUE REFERENCES stores(id), digest text NOT NULL UNIQUE,
  last_seen timestamptz NOT NULL DEFAULT now(), revoked_at timestamptz, public_ip inet

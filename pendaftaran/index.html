@@ -82,8 +82,7 @@
         <section data-panel="2" hidden>
           <h2>Informasi toko</h2>
           <p class="section-description">
-            Gunakan domain milik Anda. Informasi dikunci setelah VPS berhasil
-            dipasangkan.
+            Siapkan domain dan login dashboard sebelum menghubungkan VPS.
           </p>
           <form id="store-form">
             <label for="store-name">Nama toko / brand</label
@@ -103,11 +102,25 @@
               Isi tanpa https:// atau garis miring. Domain harus berbeda dari
               domain platform.
             </p>
+            <label for="vps-ipv4">IP publik VPS (IPv4)</label>
+            <input id="vps-ipv4" required inputmode="decimal" placeholder="Salin IPv4 dari panel VPS" />
+            <div class="notice">
+              <strong>Arahkan domain ke VPS Anda</strong>
+              <p>Di panel DNS domain, buat atau perbarui record <strong>A</strong> untuk <code id="dns-host">domain toko</code> dengan nilai <code id="dns-target">IP publik VPS</code>. Jika panel meminta nama relatif, isi <code>@</code> untuk domain utama atau nama subdomain, misalnya <code>toko</code>.</p>
+              <p>Hapus record A yang menunjuk ke IP lain atau record AAAA untuk hostname toko tersebut. Pertahankan record email.</p>
+              <button class="button secondary" type="button" id="check-dns">Periksa DNS</button>
+              <p id="dns-result" role="status"></p>
+            </div>
             <label for="admin-email">Email administrator toko</label
             ><input id="admin-email" type="email" required maxlength="254" />
+            <label for="admin-password">Buat password dashboard</label>
+            <input id="admin-password" type="password" autocomplete="new-password" minlength="12" maxlength="72" required />
             <p class="hint">
-              Password admin dibuat di VPS Anda dan tidak dikirim ke platform.
+              Minimal 12 karakter. Gunakan setidaknya tiga jenis karakter dari huruf kecil, huruf besar, angka, dan simbol. Simpan password untuk login setelah instalasi.
+              Password awal dienkripsi selama proses instalasi.
             </p>
+            <label for="admin-password-confirmation">Ulangi password dashboard</label>
+            <input id="admin-password-confirmation" type="password" autocomplete="new-password" minlength="12" maxlength="72" required />
             <div class="form-actions end">
               <button class="button primary">Simpan &amp; lanjutkan</button>
             </div>
@@ -170,48 +183,28 @@
         <section data-panel="4" hidden>
           <h2>Instalasi otomatis</h2>
           <p class="section-description">
-            Status berasal dari agent VPS. Anda boleh menutup halaman dan masuk
-            lagi dengan email yang sama.
+            Anda boleh menutup halaman ini dan kembali dengan email yang sama.
           </p>
-          <dl>
-            <dt>Nama toko</dt>
-            <dd id="install-name"></dd>
-            <dt>Domain</dt>
-            <dd id="install-domain"></dd>
-            <dt>Koneksi agent</dt>
-            <dd id="agent-status"></dd>
-            <dt>Aktivitas terakhir</dt>
-            <dd id="last-update"></dd>
-          </dl>
-          <p id="job-state" role="status"></p>
-          <ol id="stages" class="installation-stages"></ol>
-          <div class="notice">
-            <strong>Pengaturan DNS toko</strong>
-            <p>
-              Arahkan record A domain toko ke IP VPS
-              <code id="vps-ip">yang diberikan penyedia VPS</code>. Periksa AAAA
-              jika IPv6 belum tersedia. Pertahankan record email. Sertifikat
-              HTTPS diperiksa oleh installer setelah DNS sesuai.
-            </p>
+          <div class="install-progress-header">
+            <label for="install-progress">Progres instalasi</label>
+            <strong id="install-percent" aria-hidden="true">0%</strong>
           </div>
+          <progress id="install-progress" max="100" value="0"></progress>
+          <p id="job-state" role="status"></p>
           <div class="form-actions">
             <button class="button primary" id="retry" hidden>
-              Periksa lagi / lanjutkan</button
-            ><button class="button secondary" id="revoke">
-              Cabut akses agent
-            </button>
+              Coba lagi</button>
           </div>
-          <p class="hint">
-            Pencabutan menghentikan komunikasi baru. Operasi lokal yang sudah
-            berjalan dapat menyelesaikan langkahnya. Untuk berhenti segera,
-            jalankan <code>sudo systemctl stop btos-agent</code> di VPS.
-          </p>
+          <details>
+            <summary>Bantuan instalasi</summary>
+            <p class="hint">Jika instalasi tertahan, periksa panduan instalasi. Untuk menghentikan proses di VPS, jalankan <code>sudo systemctl stop btos-agent</code>.</p>
+            <button class="button secondary" id="revoke">Cabut akses agent</button>
+          </details>
         </section>
         <section data-panel="5" hidden>
           <h2>Toko siap dibuka</h2>
           <p class="section-description">
-            Installer telah melaporkan pemeriksaan HTTPS dan kesehatan aplikasi
-            berhasil.
+            <strong>100% · Instalasi selesai.</strong> HTTPS aktif dan toko siap dibuka.
           </p>
           <dl id="result"></dl>
           <div class="form-actions">
@@ -230,12 +223,11 @@
             >
           </div>
           <h3>Masuk pertama kali</h3>
-          <p>Ambil password admin dari terminal VPS Anda:</p>
-          <pre><code>sudo cat /etc/btos-agent/admin-password</code></pre>
-          <p>
-            Simpan di pengelola password, ubah password setelah masuk, lalu
-            hapus salinan file tersebut setelah akses baru dipastikan.
-          </p>
+          <p id="chosen-password">Masuk dengan email admin dan password yang Anda buat di Info Toko.</p>
+          <div id="legacy-password" hidden>
+            <p>Untuk instalasi lama, ambil password admin awal dari terminal VPS:</p>
+            <pre><code>sudo cat /etc/btos-agent/admin-password &amp;&amp; printf '\n'</code></pre>
+          </div>
           <div class="notice">
             Tambahkan produk dan lengkapi pembayaran serta pengiriman sebelum
             checkout diaktifkan. Ikuti
