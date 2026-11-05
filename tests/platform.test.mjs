@@ -285,6 +285,9 @@ test("public static allowlist prevents source and traversal exposure", async () 
     "/assets/%2e%2e/server/app.mjs",
   ])
     assert.equal((await fetch(origin + file)).status, 404);
+  const landing = await fetch(origin + "/");
+  assert.equal(landing.status, 200);
+  assert.match(await landing.text(), /Mulai Sekarang/);
   const html = await fetch(origin + "/pendaftaran");
   assert.equal(html.status, 200);
   assert.match(

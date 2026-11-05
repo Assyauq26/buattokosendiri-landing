@@ -587,7 +587,7 @@ export function createApp({ pool, config, sendMail }) {
         decoded.split("/").some((p) => p === ".." || p.startsWith("."))
       )
         reject(404, "Tidak ditemukan.");
-      let file = path.resolve(ROOT, "." + decoded);
+      let file = path.resolve(ROOT, decoded === "/" ? "index.html" : "." + decoded);
       if (!file.startsWith(ROOT)) reject(404, "Tidak ditemukan.");
       if ((await stat(file)).isDirectory())
         file = path.join(file, "index.html");
