@@ -39,7 +39,8 @@ before(async () => {
     origin: "http://127.0.0.1:18181",
     secret: "test-secret-".repeat(5),
     releases: [release],
-    installerTestEmails: ["alice@example.com"],
+    sellerPilotOnly: false,
+    installerTestEmails: ["pilot@example.com"],
   };
   app = createApp({
     pool,
@@ -105,7 +106,7 @@ test("OTP, sessions, tenant boundaries, pairing and durable completion", async (
     401,
   );
   const bob = await login("bob@example.com");
-  assert.equal((await req("/pairing", {}, { Cookie: bob })).status, 403);
+  assert.equal((await req("/pairing", {}, { Cookie: bob })).status, 422);
   const info = { name: "Toko Alice", domain: "alice.example.com", adminEmail: "alice@example.com", ...setup };
   dnsStatus = "pending";
   assert.equal((await req("/store/dns", info, { Cookie: alice })).body.ready, false);

@@ -128,8 +128,9 @@ export function createApp({ pool, config, sendMail, checkDns = checkStoreDns }) 
       rows: [row],
     } = await pool.query(
       `UPDATE agents a SET last_seen=now() FROM stores s JOIN sellers u ON u.id=s.seller_id
-       WHERE a.digest=$1 AND a.revoked_at IS NULL AND a.store_id=s.id AND u.email=ANY($2::text[]) RETURNING a.*`,
-      [digest(raw), installerTestEmails],
+       WHERE a.digest=$1 AND a.revoked_at IS NULL AND a.store_id=s.id
+         AND (NOT $2::boolean OR u.email=ANY($3::text[])) RETURNING a.*`,
+      [digest(raw), Boolean(config.sellerPilotOnly), installerTestEmails],
     );
     if (!row) reject(401, "Otorisasi agent tidak valid.");
     return row;
@@ -272,7 +273,7 @@ export function createApp({ pool, config, sendMail, checkDns = checkStoreDns }) 
           `SELECT s.id, host(s.vps_ipv4) AS vps_ipv4, u.email FROM stores s JOIN sellers u ON u.id=s.seller_id
            WHERE s.id=$1 FOR UPDATE OF s`, [candidate.store_id],
         );
-        if (!store || !installerTestEmails.includes(store.email))
+        if (!store || !canSignIn(store.email))
           reject(403, "Instalasi terbatas untuk akun uji yang diotorisasi.");
         const {
           rows: [pair],
@@ -517,8 +518,6 @@ export function createApp({ pool, config, sendMail, checkDns = checkStoreDns }) 
           503,
           "Installer belum dibuka: operator perlu menetapkan rilis yang disetujui.",
         );
-      if (!installerTestEmails.includes(user.email))
-        reject(403, "Instalasi terbatas untuk akun uji yang diotorisasi.");
       const raw = token();
       await tx(async (db) => {
         const {
