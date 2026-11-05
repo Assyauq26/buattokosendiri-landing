@@ -1,69 +1,258 @@
 <!doctype html>
 <html lang="id">
-<head>
-  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Pendaftaran — Buat Toko Online Sendiri</title>
-  <meta name="description" content="Isi informasi toko dan simpan pendaftaran. Panduan instalasi akan tersedia menyusul. Tanpa akun, password, atau OTP.">
-  <link rel="canonical" href="https://buattokosendiri.web.id/pendaftaran">
-  <link rel="icon" href="/assets/img/favicon.svg"><meta name="theme-color" content="#E1251B">
-  <link rel="stylesheet" href="/assets/css/registration.css">
-  <script src="/assets/js/registration.js" defer></script>
-</head>
-<body>
-  <a class="skip-link" href="#registration">Lewati ke formulir</a>
-  <header class="registration-header"><a class="wordmark" href="/">Buat Toko<br>Online Sendiri<span aria-hidden="true">.</span></a><a href="/">Kembali ke Beranda</a></header>
-  <main id="registration" class="registration-shell">
-    <div class="page-intro"><h1>Mulai toko milikmu sendiri.</h1><p>Isi informasi singkat untuk mencatat pendaftaran tokomu.<br>Tanpa membuat akun, password, atau OTP.</p></div>
-    <ol class="stepper" aria-label="Langkah pendaftaran">
-      <li aria-current="step"><span class="step-number">1</span><span>Isi Data</span></li>
-      <li><span class="step-number">2</span><span>Info Toko</span></li>
-      <li><span class="step-number">3</span><span>Konfirmasi</span></li>
-      <li><span class="step-number">4</span><span>Berhasil</span></li>
-    </ol>
-    <form id="registration-form" class="form-card" novalidate>
-      <div id="form-error" class="error-summary" role="alert" tabindex="-1" hidden></div>
-      <section class="form-step" data-step="1" aria-labelledby="heading-1">
-        <h2 id="heading-1" tabindex="-1">Informasi Seller</h2><p class="section-description">Lengkapi data diri untuk memulai toko online milikmu sendiri.</p>
-        <label for="fullName">Nama Lengkap <span class="required">*</span></label>
-        <input id="fullName" name="fullName" autocomplete="name" minlength="2" maxlength="100" required placeholder="Nama lengkap kamu" aria-describedby="fullName-error"><p id="fullName-error" class="field-error" hidden></p>
-        <label for="email">Alamat Email <span class="required">*</span></label>
-        <input id="email" name="email" type="email" autocomplete="email" maxlength="254" required placeholder="nama@email.com" aria-describedby="email-hint email-error"><p id="email-hint" class="hint">Untuk data kontak pendaftaran. Tidak perlu verifikasi OTP.</p><p id="email-error" class="field-error" hidden></p>
-        <label for="whatsapp">Nomor WhatsApp <span class="optional">Opsional</span></label>
-        <input id="whatsapp" name="whatsapp" type="tel" autocomplete="tel" maxlength="24" placeholder="081234567890" aria-describedby="whatsapp-error"><p id="whatsapp-error" class="field-error" hidden></p>
-        <div class="form-actions end"><button class="button primary" type="button" data-next="2">Lanjutkan <span aria-hidden="true">→</span></button></div>
-      </section>
-      <section class="form-step" data-step="2" aria-labelledby="heading-2" hidden>
-        <h2 id="heading-2" tabindex="-1">Informasi Toko</h2><p class="section-description">Ceritakan sedikit tentang toko yang ingin kamu buat.</p>
-        <label for="storeName">Nama Toko / Brand <span class="required">*</span></label>
-        <input id="storeName" name="storeName" autocomplete="organization" maxlength="100" required placeholder="Toko Ceria" aria-describedby="storeName-error"><p id="storeName-error" class="field-error" hidden></p>
-        <label for="category">Kategori Produk <span class="required">*</span></label>
-        <select id="category" name="category" required aria-describedby="category-error"><option value="">Pilih kategori produk</option><option>Fashion</option><option>Elektronik</option><option>Kecantikan</option><option>Makanan</option><option>Aksesoris</option><option>Lainnya</option></select><p id="category-error" class="field-error" hidden></p>
-        <label for="domain">Nama Domain <span class="optional">Opsional</span></label>
-        <input id="domain" name="domain" type="text" inputmode="url" autocomplete="off" maxlength="253" placeholder="tokoceria.com" aria-describedby="domain-error"><p id="domain-error" class="field-error" hidden></p>
-        <label class="checkbox"><input id="noDomain" name="noDomain" type="checkbox"><span>Saya belum mempunyai domain.</span></label>
-        <label for="city">Kota/Kabupaten <span class="optional">Opsional</span></label>
-        <input id="city" name="city" autocomplete="address-level2" maxlength="100" placeholder="Contoh: Bandung" aria-describedby="city-error"><p id="city-error" class="field-error" hidden></p>
-        <label for="description">Deskripsi Toko <span class="optional">Opsional</span></label>
-        <textarea id="description" name="description" maxlength="500" rows="3" placeholder="Produk apa yang ingin kamu jual?" aria-describedby="description-count description-error"></textarea><p id="description-count" class="hint counter">0 / 500 karakter</p><p id="description-error" class="field-error" hidden></p>
-        <div class="form-actions"><button class="button secondary" type="button" data-back="1">Kembali</button><button class="button primary" type="button" data-next="3">Lanjutkan <span aria-hidden="true">→</span></button></div>
-      </section>
-      <section class="form-step" data-step="3" aria-labelledby="heading-3" hidden>
-        <h2 id="heading-3" tabindex="-1">Tinjau Data Pendaftaran</h2><p class="section-description">Pastikan informasi berikut sudah benar.</p>
-        <div class="summary-grid"><section class="summary"><div class="summary-heading"><h3>Data Seller</h3><button type="button" class="text-button" data-back="1" aria-label="Ubah data seller">Ubah</button></div><dl id="seller-summary"></dl></section><section class="summary"><div class="summary-heading"><h3>Informasi Toko</h3><button type="button" class="text-button" data-back="2" aria-label="Ubah informasi toko">Ubah</button></div><dl id="store-summary"></dl></section></div>
-        <label class="checkbox consent"><input type="checkbox" id="consent" name="consent" required aria-describedby="consent-error"><span>Saya menyetujui <a href="/kebijakan-privasi" target="_blank" rel="noopener">Kebijakan Privasi</a> dan pemrosesan data pendaftaran untuk keperluan layanan Buat Toko Online Sendiri.</span></label><p id="consent-error" class="field-error" hidden></p>
-        <p class="hint">Pendaftaran menyimpan informasi kontak dan toko. Aplikasi belum dipasang dan tidak ada akun pusat yang dibuat.</p>
-        <div class="spam-trap" aria-hidden="true"><label for="website">Website perusahaan</label><input id="website" name="website" tabindex="-1" autocomplete="off"></div>
-        <div class="form-actions"><button class="button secondary" type="button" data-back="2">Kembali</button><button id="submit-registration" class="button primary" type="submit">Selesaikan Pendaftaran</button></div>
-      </section>
-    </form>
-    <section id="success" class="form-card success" aria-labelledby="heading-4" hidden>
-      <svg class="success-icon" viewBox="0 0 80 80" aria-hidden="true"><path d="M14 31h44v32H14zM10 31l7-17h38l7 17M25 63V43h16v20"/><path d="M10 31c0 11 13 11 13 0 0 11 13 11 13 0 0 11 13 11 13 0 0 11 13 11 13 0"/><circle cx="59" cy="56" r="16"/><path d="m51 56 6 6 10-12"/></svg>
-      <h2 id="heading-4" tabindex="-1">Pendaftaran Berhasil!</h2><p>Terima kasih telah mendaftar di Buat Toko Online Sendiri. Panduan instalasi aplikasi akan segera tersedia.</p>
-      <div class="receipt"><strong id="registered-store"></strong><span>Nomor referensi pendaftaran</span><code id="reference-code"></code><p>Data pendaftaran berhasil dicatat.</p></div>
-      <div class="success-actions"><button class="button primary" type="button" id="download-guide" disabled aria-describedby="guide-status">Download Panduan — Menyusul</button><p id="guide-status" class="hint">Panduan instalasi sedang disiapkan.</p><a class="button secondary" href="/">Kembali ke Beranda</a></div>
-    </section>
-    <noscript><p class="error-summary">Aktifkan JavaScript untuk mengisi dan mengirim formulir pendaftaran.</p></noscript>
-    <p class="form-footer">Data digunakan untuk layanan pendaftaran. <a href="/kebijakan-privasi">Baca kebijakan privasi</a>.</p>
-  </main>
-</body>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Buat Toko — Buat Toko Online Sendiri</title>
+    <link rel="icon" href="/assets/img/favicon.svg" />
+    <link rel="stylesheet" href="/assets/css/registration.css" />
+    <link rel="stylesheet" href="/assets/css/platform.css" />
+    <script src="/assets/js/platform.js" defer></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#wizard">Lewati ke formulir</a>
+    <header class="registration-header">
+      <a class="wordmark" href="/"
+        >Buat Toko<br />Online Sendiri<span>.</span></a
+      ><a href="/panduan-instalasi/">Panduan instalasi</a>
+    </header>
+    <main class="registration-shell" id="wizard">
+      <div class="page-intro">
+        <h1>Toko sendiri, mulai di sini.</h1>
+        <p>Verifikasi email, hubungkan VPS, lalu pantau instalasi toko Anda.</p>
+      </div>
+      <ol class="stepper" aria-label="Tahap instalasi">
+        <li data-step="1"><span class="step-number">1</span>Registrasi</li>
+        <li data-step="2"><span class="step-number">2</span>Info Toko</li>
+        <li data-step="3"><span class="step-number">3</span>Hubungkan VPS</li>
+        <li data-step="4"><span class="step-number">4</span>Instalasi</li>
+        <li data-step="5"><span class="step-number">5</span>Toko Siap</li>
+      </ol>
+      <div id="notice" role="status" class="notice" hidden></div>
+      <div id="error" role="alert" class="error-summary" hidden></div>
+      <div class="form-card">
+        <section data-panel="1">
+          <h2>Verifikasi email Anda</h2>
+          <p class="section-description">
+            Kode sekali pakai dikirim ke email. Gunakan email yang sama untuk
+            melanjutkan instalasi di perangkat lain.
+          </p>
+          <form id="email-form">
+            <label for="email">Alamat email</label
+            ><input
+              id="email"
+              type="email"
+              autocomplete="email"
+              required
+              maxlength="254"
+              placeholder="nama@contoh.com"
+            /><label class="checkbox"
+              ><input id="consent" type="checkbox" required /><span
+                >Saya menyetujui
+                <a href="/kebijakan-privasi/" target="_blank" rel="noopener"
+                  >Kebijakan Privasi</a
+                >, termasuk pairing dan status instalasi VPS.</span
+              ></label
+            ><button class="button primary" type="submit">
+              Kirim kode OTP
+            </button>
+          </form>
+          <form id="otp-form" hidden>
+            <label for="otp">Kode OTP 6 digit</label
+            ><input
+              id="otp"
+              inputmode="numeric"
+              autocomplete="one-time-code"
+              pattern="[0-9]{6}"
+              maxlength="6"
+              required
+            />
+            <p class="hint">
+              Berlaku 10 menit, maksimal 5 percobaan. Periksa folder spam bila
+              email belum terlihat.
+            </p>
+            <div class="form-actions">
+              <button class="button primary">Verifikasi &amp; lanjutkan</button
+              ><button class="button secondary" type="button" id="resend">
+                Kirim ulang
+              </button>
+            </div>
+          </form>
+        </section>
+        <section data-panel="2" hidden>
+          <h2>Informasi toko</h2>
+          <p class="section-description">
+            Gunakan domain milik Anda. Informasi dikunci setelah VPS berhasil
+            dipasangkan.
+          </p>
+          <form id="store-form">
+            <label for="store-name">Nama toko / brand</label
+            ><input
+              id="store-name"
+              required
+              maxlength="100"
+              placeholder="Toko Ceria"
+            /><label for="domain">Domain toko</label
+            ><input
+              id="domain"
+              required
+              autocomplete="url"
+              placeholder="tokoceria.com"
+            />
+            <p class="hint">
+              Isi tanpa https:// atau garis miring. Domain harus berbeda dari
+              domain platform.
+            </p>
+            <label for="admin-email">Email administrator toko</label
+            ><input id="admin-email" type="email" required maxlength="254" />
+            <p class="hint">
+              Password admin dibuat di VPS Anda dan tidak dikirim ke platform.
+            </p>
+            <div class="form-actions end">
+              <button class="button primary">Simpan &amp; lanjutkan</button>
+            </div>
+          </form>
+        </section>
+        <section data-panel="3" hidden>
+          <h2>Hubungkan VPS Anda</h2>
+          <p class="section-description">
+            Gunakan VPS kosong Ubuntu 24.04, minimal 2 vCPU, RAM 2 GB, dan 12 GB
+            ruang kosong. RAM di bawah 4 GB membutuhkan swap sekitar 2 GB.
+          </p>
+          <ol class="instructions">
+            <li>
+              Masuk melalui <code>ssh USER@IP_VPS</code>, lalu pastikan akun
+              Anda memiliki sudo.
+            </li>
+            <li>
+              Izinkan port 80 dan 443. Database dan wizard lokal tetap tertutup
+              dari internet.
+            </li>
+            <li>
+              Buat token pairing, salin perintah, lalu jalankan di terminal VPS.
+            </li>
+            <li>
+              Tempel token saat terminal memintanya. Token berlaku 15 menit dan
+              hanya untuk toko ini.
+            </li>
+          </ol>
+          <button class="button primary" id="pair">
+            Buat perintah pairing
+          </button>
+          <div id="pairing" hidden>
+            <label for="command">Perintah bootstrap</label
+            ><textarea
+              id="command"
+              readonly
+              rows="4"
+              spellcheck="false"
+            ></textarea
+            ><button class="button secondary" id="copy-command">
+              Salin perintah</button
+            ><label for="pair-token">Token pairing pribadi</label
+            ><input
+              id="pair-token"
+              type="password"
+              readonly
+              autocomplete="off"
+            /><button class="button secondary" id="copy-token">
+              Salin token
+            </button>
+            <p class="hint">
+              Jangan bagikan token atau memasukkannya ke riwayat shell. Tunggu
+              halaman ini mendeteksi agent.
+            </p>
+          </div>
+          <button class="text-button" id="edit-store">
+            Ubah informasi toko
+          </button>
+        </section>
+        <section data-panel="4" hidden>
+          <h2>Instalasi otomatis</h2>
+          <p class="section-description">
+            Status berasal dari agent VPS. Anda boleh menutup halaman dan masuk
+            lagi dengan email yang sama.
+          </p>
+          <dl>
+            <dt>Nama toko</dt>
+            <dd id="install-name"></dd>
+            <dt>Domain</dt>
+            <dd id="install-domain"></dd>
+            <dt>Koneksi agent</dt>
+            <dd id="agent-status"></dd>
+            <dt>Aktivitas terakhir</dt>
+            <dd id="last-update"></dd>
+          </dl>
+          <p id="job-state" role="status"></p>
+          <ol id="stages" class="installation-stages"></ol>
+          <div class="notice">
+            <strong>Pengaturan DNS toko</strong>
+            <p>
+              Arahkan record A domain toko ke IP VPS
+              <code id="vps-ip">yang diberikan penyedia VPS</code>. Periksa AAAA
+              jika IPv6 belum tersedia. Pertahankan record email. Sertifikat
+              HTTPS diperiksa oleh installer setelah DNS sesuai.
+            </p>
+          </div>
+          <div class="form-actions">
+            <button class="button primary" id="retry" hidden>
+              Periksa lagi / lanjutkan</button
+            ><button class="button secondary" id="revoke">
+              Cabut akses agent
+            </button>
+          </div>
+          <p class="hint">
+            Pencabutan menghentikan komunikasi baru. Operasi lokal yang sudah
+            berjalan dapat menyelesaikan langkahnya. Untuk berhenti segera,
+            jalankan <code>sudo systemctl stop btos-agent</code> di VPS.
+          </p>
+        </section>
+        <section data-panel="5" hidden>
+          <h2>Toko siap dibuka</h2>
+          <p class="section-description">
+            Installer telah melaporkan pemeriksaan HTTPS dan kesehatan aplikasi
+            berhasil.
+          </p>
+          <dl id="result"></dl>
+          <div class="form-actions">
+            <a
+              id="open-store"
+              class="button primary"
+              target="_blank"
+              rel="noopener"
+              >Buka Toko</a
+            ><a
+              id="open-dashboard"
+              class="button secondary"
+              target="_blank"
+              rel="noopener"
+              >Buka Dashboard</a
+            >
+          </div>
+          <h3>Masuk pertama kali</h3>
+          <p>Ambil password admin dari terminal VPS Anda:</p>
+          <pre><code>sudo cat /etc/btos-agent/admin-password</code></pre>
+          <p>
+            Simpan di pengelola password, ubah password setelah masuk, lalu
+            hapus salinan file tersebut setelah akses baru dipastikan.
+          </p>
+          <div class="notice">
+            Tambahkan produk dan lengkapi pembayaran serta pengiriman sebelum
+            checkout diaktifkan. Ikuti
+            <a href="/panduan-instalasi/">panduan hingga pesanan pertama</a>.
+          </div>
+        </section>
+      </div>
+      <footer class="form-footer">
+        <span id="signed-in"></span>
+        <button id="logout" class="text-button" hidden>Keluar</button>
+        <p>
+          <a href="/panduan-instalasi/">Panduan lengkap</a> ·
+          <a href="/panduan-instalasi/panduan-instalasi.pdf" download
+            >Unduh Panduan PDF</a
+          >
+        </p>
+      </footer>
+    </main>
+  </body>
 </html>

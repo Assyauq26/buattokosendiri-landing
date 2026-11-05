@@ -1,26 +1,16 @@
-name: Manual landing checks
-
+name: Manual platform build checks
 on:
   workflow_dispatch:
-
 permissions:
   contents: read
-
 jobs:
-  checks:
-    runs-on: ubuntu-latest
+  build:
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - name: Verify scripts and required static files
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          node --check deploy/prepare-release.cjs
-          bash -n deploy/activate-static-landing.sh
-          test -s index.html
-          test -s pendaftaran/index.html
-          test -s panduan-instalasi/index.html
-          test -s panduan-instalasi/panduan-instalasi.pdf
-          test -s assets/img/hero-desktop.png
-          test -s assets/img/hero-mobile.png
-          test "$(head -c 4 panduan-instalasi/panduan-instalasi.pdf)" = '%PDF'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm ci --ignore-scripts
+      - run: npm run build
+      - run: bash -n deploy/activate-platform.sh deploy/rollback-platform.sh agent/bootstrap.sh

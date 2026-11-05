@@ -1,0 +1,56 @@
+name: btos-platform
+services:
+  db:
+    image: postgres:16-bookworm
+    env_file: /etc/btos-platform/postgres.env
+    volumes:
+      - platform_db:/var/lib/postgresql/data
+      - /etc/btos-platform/init.sql:/docker-entrypoint-initdb.d/10-platform.sql:ro
+    networks: [database]
+    restart: unless-stopped
+    mem_limit: 256m
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U platform_owner -d platform']
+      interval: 5s
+      retries: 12
+  app:
+    image: btos-platform:${PLATFORM_SHA:?Set exact release SHA}
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    env_file: /etc/btos-platform/runtime.env
+    environment:
+      BIND_HOST: 0.0.0.0
+      PORT: '8080'
+      RELEASE_MANIFEST: /run/platform/approved-releases.json
+    volumes:
+      - /etc/btos-platform/approved-releases.json:/run/platform/approved-releases.json:ro
+    ports: ['127.0.0.1:8088:8080']
+    networks: [database, web]
+    depends_on:
+      db: {condition: service_healthy}
+    restart: unless-stopped
+    read_only: true
+    tmpfs: ['/tmp:size=16m']
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 256m
+    pids_limit: 100
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:8080/api/platform/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      retries: 6
+  migrate:
+    profiles: [tools]
+    image: btos-platform:${PLATFORM_SHA:?Set exact release SHA}
+    env_file: /etc/btos-platform/migration.env
+    networks: [database]
+    command: [node, server/migrate.mjs]
+    depends_on:
+      db: {condition: service_healthy}
+    mem_limit: 128m
+networks:
+  database: {internal: true}
+  web: {}
+volumes:
+  platform_db: {}

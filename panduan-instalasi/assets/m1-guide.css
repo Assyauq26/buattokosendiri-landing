@@ -1,0 +1,109 @@
+.guide-nav {
+  display: flex;
+  gap: 18px;
+  flex-wrap: wrap;
+  padding: 20px 0;
+  border-block: 1px solid #e5e7eb;
+  margin: 30px 0;
+}
+.step {
+  margin-bottom: 28px;
+}
+.step figure {
+  margin: 22px 0;
+}
+.step figure img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+}
+.step figcaption {
+  font-size: 12px;
+  color: #626873;
+  margin-top: 10px;
+}
+.guide-footer {
+  text-align: center;
+  padding: 32px;
+  font-size: 12px;
+  color: #626873;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  line-height: 1.7;
+}
+td,
+th {
+  padding: 12px;
+  text-align: left;
+  border-bottom: 1px solid #e5e7eb;
+  vertical-align: top;
+}
+td:first-child {
+  width: 25%;
+}
+pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+@media print {
+  @page {
+    size: A4;
+    margin: 16mm 16mm 18mm;
+  }
+  header,
+  .downloads,
+  .guide-nav {
+    display: none !important;
+  }
+  main {
+    padding: 0 !important;
+    max-width: none !important;
+  }
+  .hero {
+    padding: 0 !important;
+  }
+  .hero h1 {
+    font-size: 32px !important;
+  }
+  .step {
+    break-inside: avoid;
+    padding: 20px 0 !important;
+    border: 0 !important;
+    border-bottom: 1px solid #ddd !important;
+    border-radius: 0 !important;
+  }
+  .step h2 {
+    font-size: 22px !important;
+  }
+  .step p,
+  .step li {
+    font-size: 11px !important;
+    line-height: 1.6 !important;
+  }
+  .step figure img {
+    max-height: 98mm;
+    margin: auto;
+    width: auto;
+    max-width: 100%;
+  }
+  pre {
+    font-size: 10px !important;
+  }
+  a {
+    color: #a61b13;
+  }
+  table {
+    font-size: 10px;
+  }
+  .note {
+    font-size: 11px !important;
+  }
+  .guide-footer {
+    font-size: 10px;
+  }
+}

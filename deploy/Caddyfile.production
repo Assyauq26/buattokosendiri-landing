@@ -1,0 +1,11 @@
+# PREPARED ONLY. Do not replace the existing Hubify Caddyfile.
+# After authorized routing integration, connect the current reverse proxy to
+# btos-platform_web, validate the combined Caddyfile, then reload atomically.
+# Public ACME issuance requires DNS cutover OR an operator-provided DNS-01 certificate.
+buattokosendiri.web.id, www.buattokosendiri.web.id {
+  @www host www.buattokosendiri.web.id
+  redir @www https://buattokosendiri.web.id{uri} permanent
+  reverse_proxy btos-platform-app-1:8080
+  header X-Content-Type-Options nosniff
+  header Referrer-Policy no-referrer
+}
