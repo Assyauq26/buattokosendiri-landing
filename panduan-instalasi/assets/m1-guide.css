@@ -9,6 +9,16 @@
 .step {
   margin-bottom: 28px;
 }
+.guide-video {
+  display: block;
+  width: 100%;
+  height: auto;
+  min-height: 200px;
+  aspect-ratio: 16 / 9;
+  border: 0;
+  border-radius: 12px;
+  background: #111;
+}
 .step figure {
   margin: 22px 0;
 }
@@ -57,7 +67,8 @@ pre {
   }
   header,
   .downloads,
-  .guide-nav {
+  .guide-nav,
+  .guide-video {
     display: none !important;
   }
   main {

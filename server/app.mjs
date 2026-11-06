@@ -675,6 +675,10 @@ export function createApp({ pool, config, sendMail, checkDns = checkStoreDns }) 
         ".pdf": "application/pdf",
       }[path.extname(file)];
       if (!mime) reject(404, "Tidak ditemukan.");
+      if (file === path.join(ROOT, "panduan-instalasi", "index.html")) {
+        const policy = res.getHeader("Content-Security-Policy");
+        res.setHeader("Content-Security-Policy", `${policy}; frame-src https://www.youtube-nocookie.com`);
+      }
       res.writeHead(200, { "Content-Type": mime, "Cache-Control": "no-cache" });
       res.end(req.method === "HEAD" ? undefined : await readFile(file));
     } catch (e) {
