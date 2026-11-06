@@ -652,7 +652,7 @@ export function createApp({ pool, config, sendMail, checkDns = checkStoreDns }) 
         return res.end(await readFile(path.join(ROOT, "agent/agent.py")));
       }
       if (
-        !/^\/(?:$|index\.html$|404\.html$|portal-config\.json$|assets\/|pendaftaran(?:\/|$)|masuk(?:\/|$)|daftar(?:\/|$)|panduan-instalasi(?:\/|$)|kebijakan-privasi(?:\/|$))/.test(
+        !/^\/(?:$|index\.html$|404\.html$|portal-config\.json$|assets\/|pendaftaran(?:\/|$)|masuk(?:\/|$)|daftar(?:\/|$)|panduan-instalasi(?:\/|$)|persiapan-toko(?:\/|$)|kebijakan-privasi(?:\/|$))/.test(
           decoded,
         ) ||
         decoded.split("/").some((p) => p === ".." || p.startsWith("."))

@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Persiapan Buka Toko — Buat Toko Online Sendiri</title>
+    <meta name="description" content="Daftar persiapan sebelum membuat toko online: spesifikasi VPS, domain, nama toko, logo, banner 3:1, dan katalog produk." />
+    <link rel="canonical" href="https://buattokosendiri.web.id/persiapan-toko/" />
+    <link rel="icon" href="/assets/img/favicon.svg" />
+    <link rel="stylesheet" href="/assets/css/fonts.css" />
+    <link rel="stylesheet" href="/panduan-instalasi/assets/guide.css" />
+    <link rel="stylesheet" href="/panduan-instalasi/assets/m1-guide.css" />
+  </head>
+  <body>
+    <header>
+      <div class="top">
+        <a class="brand" href="/">Buat Toko Online Sendiri</a>
+        <a class="home" href="/">Kembali ke Beranda</a>
+      </div>
+    </header>
+    <main>
+      <div class="hero">
+        <div class="eyebrow">Daftar persiapan</div>
+        <h1>Persiapan Buka Toko Online</h1>
+        <p class="muted">
+          Siapkan VPS, domain, dan nama toko untuk pendaftaran dan instalasi.
+          Logo, banner, dan katalog bisa disiapkan dari sekarang agar toko
+          siap ditampilkan begitu instalasi selesai.
+        </p>
+      </div>
+
+      <section class="step">
+        <span class="number">01 — SERVER</span>
+        <h2>Hosting atau VPS yang kompatibel</h2>
+        <p>Untuk mengikuti instalasi otomatis, siapkan VPS atau server dengan spesifikasi berikut:</p>
+        <ul>
+          <li><strong>Sistem operasi:</strong> Ubuntu 24.04 LTS (x86_64 atau ARM64).</li>
+          <li><strong>Prosesor:</strong> minimal 2 vCPU.</li>
+          <li><strong>Memori:</strong> minimal 2 GB RAM. Jika RAM di bawah sekitar 4 GB, siapkan swap aktif sekitar 2 GB.</li>
+          <li><strong>Penyimpanan:</strong> minimal 12 GB ruang kosong.</li>
+          <li><strong>Akses:</strong> bisa masuk lewat SSH, menjalankan perintah dengan <code>sudo</code>, dan terhubung ke internet. Buka port TCP 80 dan 443 untuk toko.</li>
+        </ul>
+        <div class="note">Untuk ruang lebih lega, pilih RAM 4 GB dan SSD 40 GB. Hosting bersama yang hanya memberi akses cPanel tidak memenuhi kebutuhan installer otomatis.</div>
+      </section>
+
+      <section class="step">
+        <span class="number">02 — DOMAIN</span>
+        <h2>Domain milik Anda</h2>
+        <p>Siapkan alamat toko, misalnya <code>tokoceria.com</code>, dan pastikan Anda punya akses ke panel DNS. Saat mengisi Info Toko, ikuti petunjuk wizard untuk mengarahkan record A ke IPv4 publik VPS Anda.</p>
+      </section>
+
+      <section class="step">
+        <span class="number">03 — NAMA</span>
+        <h2>Nama brand atau toko</h2>
+        <p>Tentukan nama yang akan tampil di toko, misalnya <strong>Toko Ceria</strong>. Siapkan ejaan yang ingin Anda pakai agar nama di halaman toko, logo, dan katalog konsisten.</p>
+      </section>
+
+      <section class="step">
+        <span class="number">04 — LOGO</span>
+        <h2>Logo brand atau toko</h2>
+        <p>Simpan logo yang tetap terbaca saat tampil kecil. Jika belum punya format siap pakai, gunakan PNG dengan latar transparan. Ukuran persegi seperti 512 × 512 piksel bisa jadi titik awal.</p>
+      </section>
+
+      <section class="step">
+        <span class="number">05 — BANNER</span>
+        <h2>Gambar banner toko dengan rasio 3:1</h2>
+        <p>Siapkan gambar lebar dengan rasio <strong>3:1</strong>, misalnya <strong>1500 × 500 piksel</strong>. Letakkan teks dan bagian penting dekat tengah agar tetap terlihat jika tepi gambar terpotong di layar kecil.</p>
+      </section>
+
+      <section class="step">
+        <span class="number">06 — KATALOG</span>
+        <h2>Katalog produk</h2>
+        <p>Untuk peluncuran, siapkan <strong>minimal 10 produk jika memungkinkan</strong>. Jumlah ini saran agar katalog awal lebih lengkap; Anda bisa mendaftar dengan jumlah produk berapa pun.</p>
+        <p>Untuk setiap produk, siapkan nama, foto yang jelas, deskripsi, harga, stok, dan berat untuk pengiriman. Catat varian seperti warna atau ukuran jika ada.</p>
+      </section>
+
+      <section class="step" aria-labelledby="mulai">
+        <h2 id="mulai">Siap mendaftar?</h2>
+        <p>Gunakan alamat email yang bisa Anda akses untuk menerima kode OTP. Siapkan juga kata sandi yang akan Anda gunakan untuk masuk ke dashboard toko.</p>
+        <div class="downloads">
+          <a class="cta" href="/pendaftaran">Mulai pendaftaran</a>
+          <a class="secondary-btn" href="/panduan-instalasi/">Baca panduan instalasi</a>
+        </div>
+      </section>
+    </main>
+    <footer class="guide-footer">
+      <a href="/">Buat Toko Online Sendiri</a> · <a href="/kebijakan-privasi/">Kebijakan Privasi</a>
+    </footer>
+  </body>
+</html>

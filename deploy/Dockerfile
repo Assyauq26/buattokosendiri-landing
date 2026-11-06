@@ -8,6 +8,7 @@ COPY --chown=node:node agent ./agent
 COPY --chown=node:node assets ./assets
 COPY --chown=node:node pendaftaran ./pendaftaran
 COPY --chown=node:node panduan-instalasi ./panduan-instalasi
+COPY --chown=node:node persiapan-toko ./persiapan-toko
 COPY --chown=node:node kebijakan-privasi ./kebijakan-privasi
 COPY --chown=node:node daftar ./daftar
 COPY --chown=node:node masuk ./masuk
