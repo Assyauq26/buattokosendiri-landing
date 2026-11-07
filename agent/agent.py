@@ -20,6 +20,7 @@ import threading
 import time
 import urllib.error
 import urllib.request
+import unicodedata
 
 BASE = Path('/etc/btos-agent')
 WORK = Path('/opt/btos-agent')
@@ -59,6 +60,68 @@ def run(args, timeout=300):
     if result.returncode:
         raise RuntimeError('LOCAL_OPERATION_FAILED')
     return result.stdout.decode().strip()
+
+
+def sync_mail(config, store, core):
+    """Only paired agent receives a tenant token; never browser or shell arguments."""
+    # A controller without provisioning enabled retains the legacy install flow.
+    # It must not claim OTP readiness; the new controller gates completion itself.
+    if store.get('mailRequired') is not True:
+        return
+    try:
+        provisioning = api(config, 'mail', {})
+    except urllib.error.HTTPError as error:
+        if error.code == 403:
+            raise RuntimeError('MAIL_DISABLED') from None
+        raise
+    token = provisioning.get('token', '')
+    generation = provisioning.get('generation')
+    if (not re.fullmatch('[a-f0-9]{64}', token) or not isinstance(generation, int)
+            or provisioning.get('origin') != 'https://' + store['domain']):
+        raise RuntimeError('MAIL_IDENTITY_MISMATCH')
+    runtime = Path('/etc/single-store/runtime.env')
+    content = runtime.read_text()
+    if 'APP_ORIGIN=' + provisioning['origin'] not in content.splitlines():
+        raise RuntimeError('MAIL_ORIGIN_MISMATCH')
+    # Obtain the published identity directly from the local store database, not
+    # from browser parameters. Relay compares it against the approved registry.
+    brand = core.sql('SELECT published->\'identity\'->>\'name\' FROM "StoreAppearance";')
+    brand = ''.join(c if unicodedata.category(c)[0] in 'LMN' or c in " .&'()-" else ' '
+                    for c in unicodedata.normalize('NFKC', brand))
+    brand = re.sub(r'\s+', ' ', brand).strip()[:80].strip() or 'Toko Online'
+    request = urllib.request.Request(ORIGIN + '/api/platform/store-mail/status',
+        data=json.dumps({'origin': provisioning['origin'], 'brand': brand}).encode(),
+        headers={'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token})
+    class NoRedirect(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self, *_):
+            return None
+    try:
+        with urllib.request.build_opener(NoRedirect).open(request, timeout=15) as response:
+            if response.status != 200:
+                raise RuntimeError('MAIL_NOT_READY')
+            receipt = json.load(response)['receipt']
+    except urllib.error.HTTPError:
+        raise RuntimeError('MAIL_NOT_READY') from None
+    line = 'STORE_MAIL_RELAY_TOKEN=' + token
+    if line not in content.splitlines():
+        updated = re.sub(r'^STORE_MAIL_(?:RELAY_TOKEN|MODE)=.*\n?', '', content, flags=re.M)
+        updated = updated.rstrip() + '\n' + line + '\n'
+        temp = runtime.with_suffix('.mail.tmp')
+        fd = os.open(temp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o600)
+        with os.fdopen(fd, 'w') as out:
+            out.write(updated)
+            out.flush()
+            os.fsync(out.fileno())
+        os.replace(temp, runtime)
+        directory = os.open(runtime.parent, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            os.fsync(directory)
+        finally:
+            os.close(directory)
+    # Recreate even after an interrupted prior env write; Compose reconciles config.
+    core.dc(['up', '-d', '--no-deps', '--wait', 'app'])
+    core.healthy(False)
+    api(config, 'mail-ack', {'generation': generation, 'receipt': receipt})
 
 
 def validate_release(release):
@@ -106,7 +169,7 @@ def installed_store():
     return state
 
 
-def reconnect_store(state, store, report):
+def reconnect_store(config, state, store, report):
     if state['domain'] != store['domain']:
         report.event('preflight', 'failed', {'error_code': 'EXISTING_STORE_DOMAIN_MISMATCH'})
         return
@@ -122,6 +185,7 @@ def reconnect_store(state, store, report):
     report.event('health')
     core.healthy(False)
     core.public_health(state)
+    sync_mail(config, store, core)
     report.event('complete', 'complete', {
         'https': 'PUBLIC_CERTIFICATE_VALID', 'application': 'healthy',
         'version': 'v' + version['version'], 'source_sha': version['source_sha'],
@@ -132,7 +196,7 @@ def reconnect_store(state, store, report):
 def install(config, job, store, report):
     existing = installed_store()
     if existing:
-        reconnect_store(existing, store, report)
+        reconnect_store(config, existing, store, report)
         return
     if config.get('passwordFromWizard') and not store.get('vps_ipv4'):
         raise RuntimeError('PLATFORM_WIZARD_PROTOCOL_UNAVAILABLE')
@@ -217,6 +281,7 @@ def install(config, job, store, report):
             core.dc = original_dc
         del password
     run(['systemctl', 'disable', '--now', 'single-store-setup.service'])
+    sync_mail(config, store, core)
     report.event('complete', 'complete', {'https': 'PUBLIC_CERTIFICATE_VALID', 'application': 'healthy',
         'version': release['version'], 'source_sha': release['sha']})
 
@@ -271,12 +336,19 @@ def main():
         setup()
         return
     config = read(BASE / 'config.json')
+    next_mail_sync = 0
     with open('/run/btos-agent.lock', 'w') as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         while True:
             try:
                 payload = api(config, 'job')
                 job = payload.get('job')
+                if job and job['state'] == 'complete' and time.monotonic() >= next_mail_sync:
+                    next_mail_sync = time.monotonic() + 120
+                    sys.path.insert(0, '/opt/single-store/manager')
+                    with open('/run/single-store-operation.lock', 'w') as operation:
+                        fcntl.flock(operation, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                        sync_mail(config, payload['store'], importlib.import_module('core'))
                 if job and job['state'] in ['queued', 'running']:
                     report = Reporter(config, job)
                     stop = threading.Event()

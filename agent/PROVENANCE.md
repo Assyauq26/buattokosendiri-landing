@@ -1,7 +1,9 @@
 # Agent source provenance
 
-These files mirror the reviewed adapter source in Assyauq26/buattokoonline
-commit 4ecdb523cde85743903d90c4240ac3c0aabd0a6b.
+The automatic-mail-provisioning candidate reconciles this repository's current
+pairing/password/reconnect fixes into `Assyauq26/buattokoonline/installer/agent.py`.
+The two agent.py files must be byte-identical at release review. The historical
+4ecdb523 source reference no longer described the production platform adapter.
 
 - agent.py from installer/agent.py
 - bootstrap.sh from installer/platform-bootstrap.sh
