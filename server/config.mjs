@@ -15,6 +15,8 @@ export function config(env = process.env) {
   const releases = env.RELEASE_MANIFEST
     ? JSON.parse(readFileSync(env.RELEASE_MANIFEST, "utf8"))
     : [];
+  if (env.MAIL_PROVISIONING_ENABLED === "1" && !/^[a-f0-9]{64}$/.test(env.MAIL_CONTROL_SECRET || ""))
+    throw Error("Mail provisioning requires an operator-only control credential");
   const installerTestEmails = (env.INSTALLER_TEST_EMAILS || "")
     .split(",")
     .map((email) => email.trim().toLowerCase())
@@ -37,6 +39,8 @@ export function config(env = process.env) {
       throw Error("Only explicitly approved pinned releases are accepted");
   }
   return {
+    mailEnabled: env.MAIL_PROVISIONING_ENABLED === "1",
+    mailControlSecret: env.MAIL_CONTROL_SECRET,
     origin,
     local,
     secret: env.AUTH_SECRET,

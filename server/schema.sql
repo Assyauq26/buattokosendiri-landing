@@ -40,11 +40,23 @@ CREATE TABLE IF NOT EXISTS job_events (
  state text NOT NULL, evidence jsonb NOT NULL, created_at timestamptz NOT NULL DEFAULT now(),
  PRIMARY KEY(job_id, sequence)
 );
+CREATE TABLE IF NOT EXISTS mail_tenants (
+ store_id uuid PRIMARY KEY REFERENCES stores(id), origin text NOT NULL UNIQUE, brand text NOT NULL,
+ seller_emails text[] NOT NULL, token_digest text NOT NULL UNIQUE, token_sealed text,
+ generation integer NOT NULL DEFAULT 1, enabled boolean NOT NULL DEFAULT true,
+ verified_at timestamptz, updated_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS mail_audit (
+ id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY, store_id uuid NOT NULL REFERENCES stores(id),
+ event text NOT NULL, generation integer NOT NULL, created_at timestamptz NOT NULL DEFAULT now()
+);
 -- Runtime role is provisioned on production by the server bootstrap, never a superuser.
 DO $$ BEGIN
  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname='platform_app') THEN
   GRANT USAGE ON SCHEMA public TO platform_app;
   GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO platform_app;
+  GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO platform_app;
+  REVOKE UPDATE, DELETE ON mail_audit FROM platform_app;
  END IF;
 END $$;
 COMMIT;

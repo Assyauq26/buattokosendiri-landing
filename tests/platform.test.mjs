@@ -1,7 +1,7 @@
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { randomBytes } from "node:crypto";
+import { randomBytes, createHash, createHmac } from "node:crypto";
 import pg from "pg";
 import { createApp, CONSENT } from "../server/app.mjs";
 import { config } from "../server/config.mjs";
@@ -13,7 +13,7 @@ const setup = {
   adminPasswordConfirmation: "Local-test-password-2026!",
 };
 let dnsStatus = "ready";
-let app, origin, base;
+let app, origin, base, cfg;
 const release = {
   repository: "Assyauq26/buattokoonline",
   version: "v1.0.0",
@@ -34,7 +34,7 @@ before(async () => {
   await pool.query(
     "TRUNCATE sellers,otp_challenges,sessions,rate_limits,stores,agents,pairings,jobs,job_events CASCADE",
   );
-  const cfg = {
+  cfg = {
     local: true,
     origin: "http://127.0.0.1:18181",
     secret: "test-secret-".repeat(5),
@@ -365,4 +365,76 @@ test("production origin and secret configuration fail closed", () => {
     }),
   );
   assert.throws(() => config({ DATABASE_URL: "x", AUTH_SECRET: "short" }));
+});
+
+test("three tenants: concurrent provisioning, control authentication, lifecycle and readiness gate", async () => {
+  cfg.mailEnabled = true;
+  cfg.mailControlSecret = randomBytes(32).toString('hex');
+  const tenants = [];
+  try {
+    for (const [index, brand] of ['Gheverhan', 'Toko Makmur', 'Fashion Store'].entries()) {
+      const address = `mail-${index}@example.com`;
+      const cookie = await login(address);
+      const store = await req('/store', { ...setup, name: brand, domain: `mail-${index}.example.com`, adminEmail: address }, { Cookie: cookie });
+      assert.equal(store.status, 200);
+      const pair = await req('/pairing', {}, { Cookie: cookie });
+      const credential = randomBytes(32).toString('hex');
+      assert.equal((await req('/agent/pair', { token: pair.body.token, credential, protocol: 2, ipv4: setup.vpsIpv4 })).status, 200);
+      const auth = { Authorization: `Bearer ${credential}` };
+      const replies = await Promise.all(Array.from({ length: 8 }, () => req('/agent/mail', {}, auth)));
+      assert.ok(replies.every(r => r.status === 200));
+      assert.equal(new Set(replies.map(r => r.body.token)).size, 1);
+      const mail = replies[0].body;
+      assert.equal(mail.tenantId, store.body.store.id);
+      assert.equal(mail.brand, brand);
+      assert.equal((await req('/agent/mail', {}, { Cookie: cookie })).status, 401);
+      const publicStatus = await req('/store/mail', null, { Cookie: cookie });
+      assert.ok(!JSON.stringify(publicStatus.body).includes(mail.token));
+      const hash = createHash('sha256').update(mail.token).digest('hex');
+      assert.equal((await req('/internal/mail-registry', { tokenHash: hash }, auth)).status, 401);
+      assert.equal((await req('/internal/mail-registry', { tokenHash: hash }, { Authorization: `Bearer ${cfg.mailControlSecret}` })).body.brand, brand);
+      const job = (await req('/agent/job', null, auth)).body.job;
+      const event = { jobId: job.id, sequence: 1, stage: 'complete', state: 'complete',
+        evidence: { https: 'PUBLIC_CERTIFICATE_VALID', application: 'healthy', version: release.version, source_sha: release.sha } };
+      assert.equal((await req('/agent/event', event, auth)).status, 409);
+      assert.equal((await req('/agent/mail-ack', { generation: 1 }, auth)).status, 422);
+      const expires = Date.now() + 120000;
+      const receipt = { expires, signature: createHmac('sha256', cfg.mailControlSecret)
+        .update(`mail-ready-v1:${mail.tenantId}:1:${expires}`).digest('hex') };
+      assert.equal((await req('/agent/mail-ack', { generation: 1, receipt }, auth)).status, 200);
+      assert.equal((await req('/agent/event', event, auth)).status, 200);
+      tenants.push({ cookie, auth, mail, receipt });
+    }
+    assert.equal(new Set(tenants.map(t => t.mail.token)).size, 3);
+    assert.equal((await req('/agent/mail-ack', { generation: 1, receipt: tenants[0].receipt }, tenants[1].auth)).status, 422);
+    const a = tenants[0], b = tenants[1];
+    const changes = await Promise.all(Array.from({ length: 2 }, () => req('/store/mail', { action: 'rotate', generation: 1 }, { Cookie: a.cookie })));
+    assert.deepEqual(changes.map(r => r.status).sort(), [200, 409]);
+    const hash = createHash('sha256').update(a.mail.token).digest('hex');
+    assert.equal((await req('/internal/mail-registry', { tokenHash: hash }, { Authorization: `Bearer ${cfg.mailControlSecret}` })).status, 404);
+    assert.equal((await req('/agent/mail', {}, b.auth)).body.token, b.mail.token);
+    assert.equal((await req('/store/mail', { action: 'identity', generation: 2, brand: 'New Brand', domain: 'new.example.com', adminEmail: 'unverified@example.com' }, { Cookie: a.cookie })).status, 422);
+    dnsStatus = 'pending';
+    assert.equal((await req('/store/mail', { action: 'identity', generation: 2, brand: 'New Brand', domain: 'new.example.com', adminEmail: 'mail-0@example.com' }, { Cookie: a.cookie })).status, 422);
+    dnsStatus = 'ready';
+    assert.equal((await req('/store/mail', { action: 'identity', generation: 2, brand: 'New Brand', domain: 'new.example.com', adminEmail: 'mail-0@example.com' }, { Cookie: a.cookie })).status, 200);
+    const changed = (await req('/agent/mail', {}, a.auth)).body;
+    assert.equal(changed.brand, 'New Brand');
+    assert.equal(changed.origin, 'https://new.example.com');
+    assert.notEqual(changed.token, a.mail.token);
+    assert.equal((await req('/store/mail', { action: 'administrators', generation: 3, emails: ['mail-0@example.com', 'unknown@example.com'] }, { Cookie: a.cookie })).status, 422);
+    assert.equal((await req('/store/mail', { action: 'administrators', generation: 3, emails: ['mail-0@example.com', 'mail-1@example.com'] }, { Cookie: a.cookie })).status, 200);
+    const renewed = (await req('/agent/mail', {}, a.auth)).body;
+    const entry = await req('/internal/mail-registry', { tokenHash: createHash('sha256').update(renewed.token).digest('hex') }, { Authorization: `Bearer ${cfg.mailControlSecret}` });
+    assert.deepEqual(entry.body.sellerEmails.sort(), ['mail-0@example.com', 'mail-1@example.com']);
+    assert.equal((await req('/store/mail', { action: 'disable', generation: 4 }, { Cookie: a.cookie })).status, 200);
+    assert.equal((await req('/agent/mail', {}, a.auth)).status, 403);
+    assert.equal((await req('/store/mail', { action: 'enable', generation: 5 }, { Cookie: a.cookie })).status, 200);
+    assert.notEqual((await req('/agent/mail', {}, a.auth)).body.token, a.mail.token);
+    assert.equal((await req('/revoke', {}, { Cookie: b.cookie })).status, 200);
+    assert.equal((await req('/agent/mail', {}, b.auth)).status, 401);
+    const audits = await pool.query('SELECT event,generation FROM mail_audit');
+    assert.ok(audits.rowCount >= 6);
+    assert.ok(!JSON.stringify(audits.rows).includes(a.mail.token));
+  } finally { cfg.mailEnabled = false; dnsStatus = 'ready'; }
 });

@@ -208,6 +208,22 @@
             <strong>100% · Instalasi selesai.</strong> HTTPS aktif dan toko siap dibuka.
           </p>
           <dl id="result"></dl>
+          <details id="mail-management" hidden>
+            <summary>Email &amp; OTP</summary>
+            <p id="mail-state" role="status"></p>
+            <label for="mail-brand">Nama brand email sesuai nama yang dipublikasikan di toko</label>
+            <input id="mail-brand" maxlength="100" autocomplete="organization">
+            <label for="mail-admins">Email administrator terverifikasi (pisahkan dengan koma)</label>
+            <input id="mail-admins" maxlength="1300" autocomplete="off">
+            <p>Identitas email dikelola di sini setelah verifikasi akun platform. Perubahan diterapkan otomatis oleh agent; token tidak ditampilkan di browser.</p>
+            <div class="form-actions">
+              <button id="mail-identity" type="button" class="button primary">Simpan identitas email</button>
+              <button id="mail-administrators" type="button" class="button secondary">Simpan administrator email</button>
+              <button id="mail-rotate" type="button" class="button secondary">Rotasi akses email</button>
+              <button id="mail-disable" type="button" class="button secondary">Nonaktifkan email</button>
+              <button id="mail-enable" type="button" class="button secondary">Aktifkan kembali</button>
+            </div>
+          </details>
           <div class="form-actions">
             <a
               id="open-store"

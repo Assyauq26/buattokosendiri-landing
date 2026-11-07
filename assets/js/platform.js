@@ -56,6 +56,16 @@
   function bind(id, fn) {
     $(id).addEventListener("click", () => action(fn));
   }
+  let mailIdentity = null;
+  for (const actionName of ['identity', 'administrators', 'rotate', 'disable', 'enable']) bind('mail-' + actionName, async () => {
+    if (!mailIdentity || !current?.store) return;
+    if (['disable', 'rotate'].includes(actionName) && !window.confirm('Akses email lama langsung dicabut. Lanjutkan?')) return;
+    await api('/store/mail', { action: actionName, generation: mailIdentity.generation,
+      brand: $('mail-brand').value.trim(), domain: current.store.domain, adminEmail: $('signed-in').textContent,
+      emails: $('mail-admins').value.split(',').map(v => v.trim()).filter(Boolean) });
+    message('Perubahan diterima. Agent akan menyelaraskan konfigurasi email.');
+    await refresh();
+  });
   async function requestCode() {
     if (!$("email-form").reportValidity()) return;
     const r = await api("/otp/request", {
@@ -220,6 +230,18 @@
     panel(j.state === "complete" ? 5 : 4);
     if (j.state === "complete") {
       results(r.store, j);
+      const result = await api('/store/mail');
+      mailIdentity = result.mail;
+      $('mail-management').hidden = !mailIdentity;
+      if (mailIdentity) {
+        if (document.activeElement !== $('mail-brand')) $('mail-brand').value = mailIdentity.brand;
+        if (document.activeElement !== $('mail-admins')) $('mail-admins').value = mailIdentity.seller_emails.join(', ');
+        $('mail-state').textContent = !mailIdentity.enabled ? 'Email dinonaktifkan.' :
+          mailIdentity.verified_at ? 'Konfigurasi email terverifikasi. Status pengiriman tersedia di dashboard toko.' :
+            'Menunggu verifikasi identitas dan koneksi agent. Pastikan nama brand sama dengan yang dipublikasikan di toko.';
+        $('mail-enable').hidden = mailIdentity.enabled;
+        $('mail-disable').hidden = !mailIdentity.enabled;
+      }
       return;
     }
     const online = Date.now() - Date.parse(r.agent.last_seen) < 90000;
