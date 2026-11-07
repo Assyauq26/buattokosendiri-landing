@@ -23,7 +23,7 @@ owner, app, secret = [secrets.token_hex(32) for _ in range(3)]
 files = {
     'postgres.env': f'POSTGRES_USER=platform_owner\nPOSTGRES_DB=platform\nPOSTGRES_PASSWORD={owner}\n',
     'migration.env': f'DATABASE_URL=postgresql://platform_owner:{owner}@db:5432/platform\n',
-    'runtime.env': f'APP_ORIGIN=https://buattokosendiri.web.id\nDATABASE_URL=postgresql://platform_app:{app}@db:5432/platform\nAUTH_SECRET={secret}\nRESEND_API_KEY=\nRESEND_FROM=\nTRUST_PROXY=0\n',
+    'runtime.env': f'APP_ORIGIN=https://buattokosendiri.web.id\nDATABASE_URL=postgresql://platform_app:{app}@db:5432/platform\nAUTH_SECRET={secret}\nRESEND_API_KEY=\nTRUST_PROXY=0\n',
     'init.sql': f"CREATE ROLE platform_app LOGIN PASSWORD '{app}' NOSUPERUSER NOCREATEDB NOCREATEROLE;\nREVOKE CREATE ON SCHEMA public FROM PUBLIC;\nREVOKE CONNECT ON DATABASE platform FROM PUBLIC;\nGRANT CONNECT ON DATABASE platform TO platform_app;\n",
     'approved-releases.json': '[]\n',
     'pilot-releases.json': '[]\n',

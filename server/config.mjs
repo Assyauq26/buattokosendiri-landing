@@ -42,7 +42,6 @@ export function config(env = process.env) {
     secret: env.AUTH_SECRET,
     database: env.DATABASE_URL,
     resendKey: env.RESEND_API_KEY,
-    resendFrom: env.RESEND_FROM,
     releases,
     installerTestEmails,
     sellerPilotOnly,

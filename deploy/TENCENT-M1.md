@@ -21,9 +21,8 @@ menjalankan installer seller pada Tencent platform atau Helipod.
 5. Periksa docker logs btos-platform-app-1, docker stats --no-stream, free -m,
    dan df -h /. Pastikan endpoint Hubify /api/v1/ready tetap sehat.
 
-Konfigurasi platform berada di /etc/btos-platform. Isi RESEND_API_KEY dan
-RESEND_FROM di runtime.env lewat editor sudo pada server, dari secret dan
-alamat pengirim yang sudah diverifikasi. Jangan menyalin secret melalui chat
+Konfigurasi platform berada di /etc/btos-platform. Isi RESEND_API_KEY di runtime.env lewat editor sudo pada server.
+OTP seller memakai pengirim tetap Buattokosendiri <otp@buattokosendiri.web.id>. Jangan menyalin secret melalui chat
 atau ke Git. Buat ulang container app untuk menerapkan env. Daftar rilis
 pilot-releases.json berisi array {repository,version,sha,approved}. Masukkan
 hanya tag semver rilis publik yang disetujui, commit penuh yang cocok, dan

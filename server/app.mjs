@@ -1,3 +1,4 @@
+import { sellerOtpMessage } from "./seller-otp-mail.mjs";
 import { createServer } from "node:http";
 import {
   createHash,
@@ -137,23 +138,20 @@ export function createApp({ pool, config, sendMail, checkDns = checkStoreDns }) 
   }
   async function mail(to, code, id) {
     if (sendMail) return sendMail(to, code, id);
-    if (!config.resendKey || !config.resendFrom)
+    if (!config.resendKey)
       reject(503, "OTP belum tersedia. Konfigurasi email menunggu operator.");
     const response = await fetch("https://api.resend.com/emails", {
       method: "POST",
       signal: AbortSignal.timeout(15000),
+      redirect: "error",
       headers: {
         Authorization: `Bearer ${config.resendKey}`,
         "Content-Type": "application/json",
         "Idempotency-Key": id,
       },
-      body: JSON.stringify({
-        from: config.resendFrom,
-        to: [to],
-        subject: "Kode masuk Buat Toko Online Sendiri",
-        text: `Kode masuk Anda: ${code}\nBerlaku 10 menit. Jangan bagikan kode ini. Abaikan jika Anda tidak meminta kode.`,
-      }),
+      body: JSON.stringify(sellerOtpMessage(to, code)),
     });
+    await response.body?.cancel();
     if (!response.ok)
       reject(503, "Email belum dapat dikirim. Coba lagi nanti.");
   }
@@ -166,7 +164,7 @@ export function createApp({ pool, config, sendMail, checkDns = checkStoreDns }) 
       await pool.query("SELECT 1");
       return reply(200, {
         ok: true,
-        otpConfigured: !!(config.resendKey && config.resendFrom),
+        otpConfigured: Boolean(config.resendKey),
         installerEnabled: config.releases.length > 0,
       });
     }
