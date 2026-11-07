@@ -1,6 +1,9 @@
 name: Platform mail candidate verification
 on:
   workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths: ['server/**', 'tests/**', 'agent/**', 'assets/js/platform.js', '.github/workflows/mail-candidate.yml']
 permissions:
   contents: read
 jobs:
