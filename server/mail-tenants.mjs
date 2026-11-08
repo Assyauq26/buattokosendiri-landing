@@ -24,10 +24,8 @@ export async function provisionMail(db, store, secret) {
   const vault = installerPasswordVault("mail-relay-v1:" + secret);
   let { rows: [tenant] } = await db.query("SELECT * FROM mail_tenants WHERE store_id=$1", [store.id]);
   if (!tenant) {
-    // Free-plan admission gate. Serialize only first provisioning, not all sends.
-    await db.query('SELECT pg_advisory_xact_lock(5924261106)');
-    const { rows: [capacity] } = await db.query('SELECT count(*)::int AS total FROM mail_tenants');
-    if (capacity.total >= 3) throw Object.assign(Error('Kapasitas canary email penuh; aktivasi umum belum dibuka.'), { status: 503 });
+    // Admission is dynamic. The caller's store row lock and unique constraints
+    // preserve idempotency; provider capacity is enforced when sending mail.
     const token = randomBytes(32).toString("hex");
     ({ rows: [tenant] } = await db.query(
       `INSERT INTO mail_tenants(store_id,origin,brand,seller_emails,token_digest,token_sealed)

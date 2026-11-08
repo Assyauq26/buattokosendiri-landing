@@ -143,8 +143,15 @@ export function createApp({ pool, config, sendMail, checkDns = checkStoreDns }) 
       reject(503, "OTP belum tersedia. Konfigurasi email menunggu operator.");
     // Explicit free-plan budget partition: platform 50/day + relay 50/day.
     const calendar = new Date().toISOString();
-    await rate('provider-day:' + calendar.slice(0, 10), 50, 86400);
-    await rate('provider-month:' + calendar.slice(0, 7), 1500, 32 * 86400);
+    try {
+      await rate('provider-burst', 1, 1);
+      await rate('provider-day:' + calendar.slice(0, 10), 50, 86400);
+      await rate('provider-month:' + calendar.slice(0, 7), 1500, 32 * 86400);
+    } catch (error) {
+      console.warn('platform_mail.quota_exhausted');
+      if (error.status === 429) reject(429, 'Batas pengiriman Email & OTP Beta tercapai. Email belum dikirim. Coba lagi setelah batas pengiriman pulih.');
+      throw error;
+    }
     const response = await fetch("https://api.resend.com/emails", {
       method: "POST",
       signal: AbortSignal.timeout(15000),
