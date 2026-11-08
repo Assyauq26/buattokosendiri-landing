@@ -1,4 +1,5 @@
 import { sellerOtpMessage } from "./seller-otp-mail.mjs";
+import { controlAuthorized, lookupMailTenant, provisionMail, rotateMail, mailBrand, verifyMailReceipt } from "./mail-tenants.mjs";
 import { createServer } from "node:http";
 import {
   createHash,
@@ -140,6 +141,10 @@ export function createApp({ pool, config, sendMail, checkDns = checkStoreDns }) 
     if (sendMail) return sendMail(to, code, id);
     if (!config.resendKey)
       reject(503, "OTP belum tersedia. Konfigurasi email menunggu operator.");
+    // Explicit free-plan budget partition: platform 50/day + relay 50/day.
+    const calendar = new Date().toISOString();
+    await rate('provider-day:' + calendar.slice(0, 10), 50, 86400);
+    await rate('provider-month:' + calendar.slice(0, 7), 1500, 32 * 86400);
     const response = await fetch("https://api.resend.com/emails", {
       method: "POST",
       signal: AbortSignal.timeout(15000),
@@ -160,6 +165,13 @@ export function createApp({ pool, config, sendMail, checkDns = checkStoreDns }) 
     const peer = req.socket.remoteAddress.replace(/^::ffff:/, "");
     const forwarded = req.headers["x-forwarded-for"]?.split(",").at(-1).trim();
     const ip = peer === config.trustedProxyIp && isIP(forwarded || "") ? forwarded : peer;
+    // Operator-only control plane; the public proxy must also block /internal/*.
+    if (route === "/internal/mail-registry" && req.method === "POST") {
+      if (!config.mailEnabled || !controlAuthorized(req.headers.authorization, config.mailControlSecret))
+        reject(401, "Otorisasi tidak valid.");
+      const tenant = await lookupMailTenant(pool, data.tokenHash);
+      return reply(tenant ? 200 : 404, tenant || { error: "Tenant tidak tersedia." });
+    }
     if (route === "/health" && req.method === "GET") {
       await pool.query("SELECT 1");
       return reply(200, {
@@ -328,6 +340,27 @@ export function createApp({ pool, config, sendMail, checkDns = checkStoreDns }) 
     }
     if (route.startsWith("/agent/")) {
       const a = await agent(req);
+      if (route === "/agent/mail" && req.method === "POST") {
+        if (!config.mailEnabled) reject(503, "Aktivasi email belum tersedia.");
+        await rate("agent-mail:" + a.id, 120, 3600);
+        const result = await tx(async db => {
+          const { rows: [store] } = await db.query("SELECT * FROM stores WHERE id=$1 FOR UPDATE", [a.store_id]);
+          // Provision only canonical platform identity, never caller-supplied fields.
+          const { rows: [active] } = await db.query("SELECT id FROM agents WHERE id=$1 AND revoked_at IS NULL", [a.id]);
+          if (!active) reject(401, "Agent tidak aktif.");
+          return provisionMail(db, store, config.secret);
+        });
+        if (!result) reject(403, "Email toko dinonaktifkan.");
+        return reply(200, result);
+      }
+      if (route === "/agent/mail-ack" && req.method === "POST") {
+        if (!verifyMailReceipt(data.receipt, a.store_id, data.generation, config.mailControlSecret))
+          reject(422, "Bukti kesiapan relay tidak valid.");
+        const result = await pool.query(`UPDATE mail_tenants SET verified_at=now()
+          WHERE store_id=$1 AND generation=$2 AND enabled RETURNING store_id`, [a.store_id, data.generation]);
+        if (!result.rowCount) reject(409, "Konfigurasi email telah berubah.");
+        return reply(200, { ok: true });
+      }
       if (route === "/agent/job" && req.method === "GET") {
         const {
           rows: [job],
@@ -341,7 +374,7 @@ export function createApp({ pool, config, sendMail, checkDns = checkStoreDns }) 
           `SELECT ${STORE_FIELDS} FROM stores WHERE id=$1`,
           [a.store_id],
         );
-        return reply(200, { job, store });
+        return reply(200, { job, store: store ? { ...store, mailRequired: config.mailEnabled } : store });
       }
       if (route === "/agent/admin-password" && req.method === "GET") {
         const { rows: [store] } = await pool.query(
@@ -395,6 +428,11 @@ export function createApp({ pool, config, sendMail, checkDns = checkStoreDns }) 
           const versionVerified = reattached && job.evidence.reattachRequested === true
             ? /^[a-f0-9]{40}$/.test(evidence.source_sha || "") && /^v\d+\.\d+\.\d+$/.test(evidence.version || "")
             : evidence.source_sha === job.release.sha && evidence.version === job.release.version;
+          if (data.state === "complete" && config.mailEnabled) {
+            const { rowCount } = await db.query(`SELECT store_id FROM mail_tenants
+              WHERE store_id=$1 AND enabled AND verified_at IS NOT NULL`, [a.store_id]);
+            if (!rowCount) reject(409, "Aktivasi Email OTP belum terverifikasi.");
+          }
           if (
             data.state === "complete" &&
             (data.stage !== "complete" ||
@@ -420,6 +458,54 @@ export function createApp({ pool, config, sendMail, checkDns = checkStoreDns }) 
       reject(404, "Endpoint tidak ditemukan.");
     }
     const user = await seller(req);
+    if (route === "/store/mail" && req.method === "GET") {
+      const { rows: [mail] } = await pool.query(`SELECT t.origin,t.brand,t.seller_emails,t.generation,t.enabled,t.verified_at
+        FROM mail_tenants t JOIN stores s ON s.id=t.store_id WHERE s.seller_id=$1`, [user.id]);
+      return reply(200, { mail: mail || null });
+    }
+    if (route === "/store/mail" && req.method === "POST") {
+      await rate("mail-management:" + user.id, 20, 3600);
+      if (!config.mailEnabled) reject(503, "Aktivasi email belum tersedia.");
+      if (!["rotate", "disable", "enable", "identity", "administrators"].includes(data.action) || !Number.isSafeInteger(data.generation))
+        reject(422, "Permintaan tidak valid.");
+      const result = await tx(async db => {
+        const { rows: [store] } = await db.query("SELECT * FROM stores WHERE seller_id=$1 FOR UPDATE", [user.id]);
+        if (!store) reject(404, "Toko tidak ditemukan.");
+        const { rows: [tenant] } = await db.query("SELECT * FROM mail_tenants WHERE store_id=$1 FOR UPDATE", [store.id]);
+        // Compare-and-swap makes repeat/concurrent management requests harmless.
+        if (!tenant || tenant.generation !== data.generation) reject(409, "Muat ulang status email terbaru.");
+        if (data.action === 'administrators') {
+          if (!Array.isArray(data.emails) || !data.emails.length || data.emails.length > 5)
+            reject(422, 'Isi maksimal lima email administrator.');
+          const emails = [...new Set(data.emails.map(email))];
+          if (!emails.includes(user.email)) reject(422, 'Pemilik toko harus tetap terdaftar.');
+          const { rowCount } = await db.query('SELECT id FROM sellers WHERE email=ANY($1::text[])', [emails]);
+          if (rowCount !== emails.length) reject(422, 'Setiap administrator harus memverifikasi emailnya di platform terlebih dahulu.');
+          await db.query('UPDATE mail_tenants SET seller_emails=$2 WHERE store_id=$1', [store.id, emails]);
+        }
+        if (data.action === "identity") {
+          const d = domain(data.domain);
+          if (typeof data.brand !== "string" || !data.brand.trim() || data.brand.length > 100)
+            reject(422, "Nama toko tidak valid.");
+          // Owner's freshly authenticated platform session controls identity. Agent
+          // credentials alone never authorize a brand, origin or administrator change.
+          if (email(data.adminEmail) !== user.email)
+            reject(422, "Administrator email harus akun platform yang telah diverifikasi OTP.");
+          if (await checkDns(d, store.vps_ipv4) !== "ready") reject(422, "Verifikasi DNS belum berhasil.");
+          await db.query(`UPDATE mail_tenants SET origin=$2,brand=$3,seller_emails=$4 WHERE store_id=$1`,
+            [store.id, "https://" + d, mailBrand(data.brand), [...new Set([...tenant.seller_emails, user.email])]]);
+          await db.query('UPDATE stores SET domain=$2,name=$3,admin_email=$4 WHERE id=$1',
+            [store.id, d, data.brand.trim(), user.email]);
+        }
+        await rotateMail(db, tenant, config.secret);
+        if (["disable", "enable"].includes(data.action))
+          await db.query("UPDATE mail_tenants SET enabled=$2 WHERE store_id=$1", [store.id, data.action === "enable"]);
+        await db.query("INSERT INTO mail_audit(store_id,event,generation) VALUES($1,$2,$3)",
+          [store.id, data.action, tenant.generation + 1]);
+        return { ok: true, generation: tenant.generation + 1 };
+      });
+      return reply(200, result);
+    }
     if (route === "/session" && req.method === "GET")
       return reply(200, { seller: user, consent: CONSENT });
     if (route === "/logout" && req.method === "POST") {
@@ -450,6 +536,8 @@ export function createApp({ pool, config, sendMail, checkDns = checkStoreDns }) 
         reject(422, "Nama toko harus 1–100 karakter.");
       const d = domain(data.domain),
         admin = email(data.adminEmail);
+      if (config.mailEnabled && admin !== user.email)
+        reject(422, "Gunakan email platform yang sudah diverifikasi untuk administrator toko.");
       if (!isStoreIpv4(data.vpsIpv4)) reject(422, "Masukkan IPv4 publik VPS toko yang valid.");
       if (!validAdminPassword(data.adminPassword, data.adminPasswordConfirmation))
         reject(422, "Password harus cocok, minimal 12 karakter, maksimal 72 byte, dan memakai tiga jenis karakter.");
@@ -562,6 +650,12 @@ export function createApp({ pool, config, sendMail, checkDns = checkStoreDns }) 
     }
     if (route === "/revoke" && req.method === "POST") {
       await tx(async (db) => {
+        await db.query("SELECT id FROM stores WHERE seller_id=$1 FOR UPDATE", [user.id]);
+        await db.query(`UPDATE mail_tenants SET enabled=false,token_sealed=NULL,verified_at=NULL,
+          generation=generation+1 WHERE store_id IN (SELECT id FROM stores WHERE seller_id=$1)`, [user.id]);
+        await db.query(`INSERT INTO mail_audit(store_id,event,generation)
+          SELECT store_id,'agent-revoked',generation FROM mail_tenants
+          WHERE store_id IN (SELECT id FROM stores WHERE seller_id=$1)`, [user.id]);
         const { rows } = await db.query(
           "UPDATE agents SET revoked_at=now() FROM stores WHERE agents.store_id=stores.id AND stores.seller_id=$1 RETURNING store_id", [user.id],
         );
