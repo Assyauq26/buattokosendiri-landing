@@ -372,7 +372,7 @@ test("three tenants: concurrent provisioning, control authentication, lifecycle 
   cfg.mailControlSecret = randomBytes(32).toString('hex');
   const tenants = [];
   try {
-    for (const [index, brand] of ['Gheverhan', 'Toko Makmur', 'Fashion Store'].entries()) {
+    for (const [index, brand] of ['Gheverhan', 'Toko Makmur', 'Fashion Store', 'Seller Baru'].entries()) {
       const address = `mail-${index}@example.com`;
       const cookie = await login(address);
       const store = await req('/store', { ...setup, name: brand, domain: `mail-${index}.example.com`, adminEmail: address }, { Cookie: cookie });
@@ -405,7 +405,7 @@ test("three tenants: concurrent provisioning, control authentication, lifecycle 
       assert.equal((await req('/agent/event', event, auth)).status, 200);
       tenants.push({ cookie, auth, mail, receipt });
     }
-    assert.equal(new Set(tenants.map(t => t.mail.token)).size, 3);
+    assert.equal(new Set(tenants.map(t => t.mail.token)).size, 4);
     assert.equal((await req('/agent/mail-ack', { generation: 1, receipt: tenants[0].receipt }, tenants[1].auth)).status, 422);
     const a = tenants[0], b = tenants[1];
     const changes = await Promise.all(Array.from({ length: 2 }, () => req('/store/mail', { action: 'rotate', generation: 1 }, { Cookie: a.cookie })));
