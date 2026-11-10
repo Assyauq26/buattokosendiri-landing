@@ -134,6 +134,7 @@ def prepare(sha):
     dbpass, master, pepper, webhook, vault, token = [secrets.token_hex(32) for _ in range(6)]
     sql("CREATE ROLE btos_whatsapp LOGIN PASSWORD '" + dbpass + "' NOSUPERUSER NOCREATEDB NOCREATEROLE; CREATE SCHEMA whatsapp_pilot; SET search_path=whatsapp_pilot,public;\n" + (source / 'server/whatsapp/schema.sql').read_text() + "\nGRANT USAGE ON SCHEMA whatsapp_pilot TO btos_whatsapp; GRANT SELECT,INSERT,UPDATE,DELETE ON ALL TABLES IN SCHEMA whatsapp_pilot TO btos_whatsapp; ALTER ROLE btos_whatsapp SET search_path=whatsapp_pilot,public;")
     print('PILOT_SCHEMA_ISOLATED', flush=True)
+    sql('GRANT CONNECT ON DATABASE platform TO btos_whatsapp;')
     data = STATE / 'openwa'; data.mkdir(mode=0o700); os.chown(data, 1000, 1000)
     write(ROOT / 'hubify-token', token + '\n', 0o440); os.chown(ROOT / 'hubify-token', 0, 1000)
     provider = {
@@ -186,6 +187,23 @@ def prepare(sha):
     print('WHATSAPP_PRIVATE_READY_NO_PAIRING_NO_MESSAGES')
 
 
+def resume_private(j):
+    # Resume only a preparation interrupted before public routing. No new schema,
+    # token, session identity or production container is created/replaced here.
+    if j['state'] != 'preparing' or snapshot() != j['services'] or hashlib.sha256(CADDY.read_bytes()).hexdigest() != j['caddyBefore']:
+        raise RuntimeError('preparation_changed')
+    sql('GRANT CONNECT ON DATABASE platform TO btos_whatsapp;')
+    dc('run', '--rm', '--no-deps', 'relay', 'node', 'server/whatsapp/provision-pilot.mjs')
+    dc('up', '-d', '--no-build', 'relay')
+    time.sleep(3)
+    if run(['curl', '-sS', '-o', '/dev/null', '-w', '%{http_code}', '--max-time', '10', 'http://127.0.0.1:8092/api/platform/whatsapp/session/status', '-X', 'POST', '-H', 'Content-Type: application/json', '--data', '{}']).decode() != '401':
+        raise RuntimeError('relay_auth_smoke_failed')
+    health()
+    if snapshot() != j['services']: raise RuntimeError('production_service_changed')
+    j['state'] = 'private-ready'; save(j)
+    print('WHATSAPP_PRIVATE_READY_NO_PAIRING_NO_MESSAGES')
+
+
 def activate(j):
     if j['state'] != 'private-ready' or snapshot() != j['services'] or hashlib.sha256(CADDY.read_bytes()).hexdigest() != j['caddyBefore']:
         raise RuntimeError('preparation_changed')
@@ -213,10 +231,12 @@ if __name__ == '__main__':
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
             action, sha = sys.argv[1:]
             if action == 'prepare': prepare(sha)
-            elif action in ['activate', 'rollback']:
+            elif action in ['activate', 'rollback', 'resume-private']:
                 j = json.loads(JOURNAL.read_text())
                 if j['sha'] != sha: raise RuntimeError('source_mismatch')
-                activate(j) if action == 'activate' else rollback(j)
+                if action == 'resume-private': resume_private(j)
+                elif action == 'activate': activate(j)
+                else: rollback(j)
             else: raise RuntimeError('unknown_action')
     except Exception as error:
         # Do not print subprocess output/SQL/env/provider payloads.
