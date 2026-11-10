@@ -125,6 +125,7 @@ export class OpenWA {
     if (
       data.id !== id ||
       ![
+        "created",
         "disconnected",
         "initializing",
         "qr_ready",
@@ -136,7 +137,9 @@ export class OpenWA {
     )
       reject("gateway_response");
     return {
-      status: data.status,
+      // A new provider session exists before its engine starts. Expose the same
+      // connect action as disconnected, without claiming it has ever paired.
+      status: data.status === "created" ? "disconnected" : data.status,
       phone: data.phone ? normalizePhone("+" + data.phone) : null,
       loaded: data.engineLoaded === true,
       connectedAt: data.connectedAt ?? null,

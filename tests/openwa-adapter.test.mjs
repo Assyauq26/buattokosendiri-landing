@@ -69,6 +69,12 @@ test("operator private gateway origin and session identifiers are bounded", asyn
   ])
     assert.throws(() => normalizePhone(value));
 });
+test("fresh provider session can start pairing without being treated as invalid", async () => {
+  const gateway = new OpenWA({origin: "http://openwa:2785", apiKey: key,
+    fetcher: async () => Response.json({id, status: "created", phone: null, engineLoaded: false})});
+  assert.deepEqual(await gateway.status(id), {status: "disconnected", phone: null, loaded: false, connectedAt: null});
+});
+
 test("provider send uses stable idempotency and never claims delivered", async () => {
   const calls = [];
   const gateway = new OpenWA({
