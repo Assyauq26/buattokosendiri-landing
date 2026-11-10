@@ -1,4 +1,5 @@
 import { sellerOtpMessage } from "./seller-otp-mail.mjs";
+import { storeReleases } from "./store-releases.mjs";
 import { controlAuthorized, lookupMailTenant, provisionMail, rotateMail, mailBrand, verifyMailReceipt } from "./mail-tenants.mjs";
 import { createServer } from "node:http";
 import {
@@ -186,6 +187,13 @@ export function createApp({ pool, config, sendMail, checkDns = checkStoreDns }) 
         otpConfigured: Boolean(config.resendKey),
         installerEnabled: config.releases.length > 0,
       });
+    }
+    if (route === "/store-releases" && req.method === "GET") {
+      try {
+        return reply(200, await storeReleases(config.storeCatalog, config.storeCatalogTrust));
+      } catch {
+        return reply(503, { error: "Daftar rilis terverifikasi belum tersedia." });
+      }
     }
     if (
       req.method === "POST" &&

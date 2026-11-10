@@ -39,6 +39,8 @@ export function config(env = process.env) {
       throw Error("Only explicitly approved pinned releases are accepted");
   }
   return {
+    storeCatalog: env.STORE_SIGNED_CATALOG_FILE,
+    storeCatalogTrust: env.STORE_CATALOG_PUBLIC_KEYS_FILE,
     mailEnabled: env.MAIL_PROVISIONING_ENABLED === "1",
     mailControlSecret: env.MAIL_CONTROL_SECRET,
     origin,
