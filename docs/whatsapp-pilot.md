@@ -45,8 +45,8 @@ Record real evidence separately after owner action; no general rollout yet.
 
 ## Tencent pilot evidence, 2026-11-10
 
-The isolated relay at commit `f7a3fe66791cc4039de781f92c303d3f7f7f26fd`
-is active through the bounded HTTPS WhatsApp prefix. Existing platform/store,
+The isolated relay was initially activated at `f7a3fe66791cc4039de781f92c303d3f7f7f26fd`
+through the bounded HTTPS WhatsApp prefix. Existing platform/store,
 email relay, databases and proxy container identities were preserved. Anonymous
 session requests return 401; the provider and private operator pairing listener
 remain inaccessible through that public route. Configuration and database backup
@@ -58,8 +58,8 @@ than rejecting it. The regression test plus the full 35-test relay suite pass.
 
 The owner confirmed central number pairing. Read-only provider/registry checks
 confirmed `ready`, the expected central phone, and no remaining QR. This proves
-connection only, not message delivery or authentication completion. Seller pairing
-and actual test delivery remain outstanding; no general enrollment is enabled.
+connection only. Seller pairing and actual test evidence are recorded below;
+no general enrollment is enabled.
 
 ## Resolved private sender IDs, 2026-11-10
 
@@ -74,13 +74,36 @@ recipient allowlist and browser/tenant/purpose binding remain rejected.
 
 Local regression: 38 tests pass, including PostgreSQL resolved-LID receive,
 deduplication and no authentication exchange until secret-code verification.
-The owner must create a fresh challenge after deployment; expired challenges
-are not replayed or extended. Live reply and browser completion are pending.
+Expired challenges are not replayed or extended.
 
 Both central and seller pairings were verified ready with expected phones.
 Provider polling was reduced to 30 seconds, and Retry-After is honored across
 all provider routes. Operator pairing is disabled after use. A single authorized
 synthetic notification was submitted once (duplicate enqueue deduplicated),
-with encrypted message payload erased after submission. Delivery has not yet
-been confirmed; no blind resend is permitted. Notification preferences and
+with encrypted message payload erased after submission. No blind resend is
+permitted. Notification preferences and
 synthetic consent were restored after the test.
+
+## Live owner verification after LID fix
+
+Relay commit `e1eac9fc106662729eeea8d2ddc6404341cb9e49` is active. Only the
+relay container was recreated; all eight other container identities, including
+the paired provider, were preserved. Hubify readiness and platform health return
+200. Rollback configuration and script are retained in root-only backup
+`/var/backups/btos-platform/whatsapp-lid-1794317211`.
+
+The owner created a fresh challenge, received its secret reply, entered it only
+in the initiating browser, and confirmed successful phone verification. Database
+evidence: central challenge consumed, exchange consumed, store challenge verified;
+one auth delivery submitted with provider ID and encrypted payload erased. Two
+older expired challenges stayed unused. No WhatsAppIdentity was automatically
+created: the new-phone profile/email or existing-account password step is still
+required. This proves phone verification, not completed account registration or
+an existing-account login.
+
+The owner also confirmed receipt of the single synthetic notification
+`ORD-PILOT-UJI-1794316320482` (queue `a4584836-d258-4be7-a5f4-1e3535c2d8db`).
+Provider records still show submitted, not delivered/read; owner receipt is
+separate evidence and does not overwrite provider status. Both sessions remain
+ready with matching expected phones. Notifications remain disabled until seller
+opt-in; test consent was revoked. The drain timer is active with successful exit.
