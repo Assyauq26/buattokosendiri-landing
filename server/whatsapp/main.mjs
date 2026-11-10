@@ -24,6 +24,7 @@ const auth = new WhatsAppAuth({
   webhookSecret: process.env.OPENWA_WEBHOOK_SECRET,
   centralPhone: process.env.WA_CENTRAL_PHONE,
   enabled: process.env.WA_AUTH_ENABLED === "1",
+  publicAuth: process.env.WA_PUBLIC_AUTH === "1",
   allowedRecipients: (process.env.WA_ALLOWED_RECIPIENTS || "")
     .split(",")
     .filter(Boolean),

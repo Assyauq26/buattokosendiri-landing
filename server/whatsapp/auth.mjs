@@ -37,6 +37,7 @@ export class WhatsAppAuth {
     centralPhone,
     enabled = false,
     allowedRecipients = [],
+    publicAuth = false,
   }) {
     if (
       typeof secret !== "string" ||
@@ -50,14 +51,19 @@ export class WhatsAppAuth {
     this.webhookSecret = webhookSecret;
     this.centralPhone = normalizePhone(centralPhone);
     this.enabled = enabled;
+    this.publicAuth = publicAuth === true;
     this.allowed = new Set(allowedRecipients.map(normalizePhone));
     this.vault = installerPasswordVault("whatsapp-auth-reply-v1:" + secret);
   }
   mac(value) {
     return createHmac("sha256", this.secret).update(value).digest("hex");
   }
+  accepts(phone) {
+    return this.publicAuth || this.allowed.has(phone);
+  }
   gate() {
-    if (!this.enabled || !this.allowed.size) fail("whatsapp_unavailable");
+    if (!this.enabled || (!this.publicAuth && !this.allowed.size))
+      fail("whatsapp_unavailable");
   }
   async tx(fn) {
     const db = await this.pool.connect();
@@ -101,7 +107,7 @@ export class WhatsAppAuth {
     if (!HEX.test(browserProof || "") || !["login", "link"].includes(purpose))
       fail("invalid_request");
     this.gate();
-    if (!this.allowed.has(phone)) fail("pilot_recipient_required");
+    if (!this.accepts(phone)) fail("pilot_recipient_required");
     return this.tx(async (db) => {
       const tenant = await this.tenant(db, token);
       await db.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [
@@ -116,6 +122,11 @@ export class WhatsAppAuth {
       if (recent) fail("cooldown");
       await this.limit(db, "phone:" + phone, 3, 3600);
       await this.limit(db, "tenant:" + tenant.id, 60, 3600);
+      // Shared provider budget remains bounded even with public admission.
+      await db.query(
+        "SELECT pg_advisory_xact_lock(hashtextextended('btos-wa-public-budget',0))",
+      );
+      await this.limit(db, "global:auth", 120, 3600);
       const {
         rows: [central],
       } = await db.query(
@@ -158,7 +169,7 @@ export class WhatsAppAuth {
     this.gate();
     const event = verifyWebhook(raw, headers, this.webhookSecret);
     const incoming = incomingIdentity(event, this.centralPhone);
-    if (!this.allowed.has(incoming.phone)) fail("pilot_recipient_required");
+    if (!this.accepts(incoming.phone)) fail("pilot_recipient_required");
     const command = /^BTOS (LOGIN|LINK) ([a-f0-9]{64})$/.exec(incoming.body);
     if (!command) return { ignored: true }; // Never store unrelated private messages.
     return this.tx(async (db) => {
@@ -172,7 +183,7 @@ export class WhatsAppAuth {
       const {
         rows: [challenge],
       } = await db.query(
-        `SELECT c.*,t.brand FROM wa_challenges c JOIN wa_tenants t ON t.id=c.tenant_id
+        `SELECT c.*,t.brand,t.origin FROM wa_challenges c JOIN wa_tenants t ON t.id=c.tenant_id
         WHERE c.public_digest=$1 AND c.phone=$2 AND c.purpose=$3 AND c.state='waiting' AND c.expires_at>now()
         AND t.auth_enabled AND NOT t.paused AND t.generation=c.tenant_generation
         AND c.session_id=$4 AND c.session_generation=(SELECT generation FROM wa_sessions WHERE provider_id=$4)
@@ -195,7 +206,20 @@ export class WhatsAppAuth {
       const brand = String(challenge.brand)
         .replace(/[\r\n\x00-\x1f]/g, " ")
         .slice(0, 80);
-      const text = `Kode verifikasi ${brand}: ${code}\nMasukkan hanya di browser tempat Anda memulai permintaan. Jangan bagikan kode ini. Abaikan jika Anda tidak meminta masuk atau menautkan nomor. Berlaku sampai ${challenge.expires_at.toISOString()}.`;
+      const replyDigest = this.mac(challenge.id + ":" + code);
+      const confirmation = this.mac(
+        "confirm-link:" + challenge.id + ":" + replyDigest,
+      );
+      const origin = new URL(challenge.origin);
+      if (origin.protocol !== "https:" || origin.origin !== challenge.origin)
+        fail("auth_configuration");
+      const url =
+        origin.origin +
+        "/whatsapp#confirm=" +
+        challenge.id +
+        "." +
+        confirmation;
+      const text = `${brand}\nKonfirmasi & Lanjutkan:\n${url}\n\nBuka di browser tempat Anda mulai.\nKode cadangan: ${code}\nSegera konfirmasi. Jangan bagikan tautan atau kode ini.`;
       await db.query(
         "UPDATE wa_challenges SET state='reply_queued',reply_digest=$2 WHERE id=$1",
         [challenge.id, this.mac(challenge.id + ":" + code)],
@@ -230,11 +254,13 @@ export class WhatsAppAuth {
       expiresAt: c.expires_at,
     };
   }
-  async finish(token, { id, browserProof, code }) {
+  async finish(token, { id, browserProof, code, confirmationToken }) {
     if (
       !UUID.test(id || "") ||
       !HEX.test(browserProof || "") ||
-      !/^\d{6}$/.test(code || "")
+      !(confirmationToken === undefined
+        ? /^\d{6}$/.test(code || "")
+        : code === undefined && HEX.test(confirmationToken))
     )
       fail("challenge_invalid");
     const result = await this.tx(async (db) => {
@@ -251,7 +277,7 @@ export class WhatsAppAuth {
         c.expires_at <= new Date() ||
         c.state !== "reply_sent" ||
         c.attempts >= 5 ||
-        !this.allowed.has(c.phone)
+        !this.accepts(c.phone)
       )
         return null;
       const {
@@ -261,7 +287,15 @@ export class WhatsAppAuth {
         [c.session_id, c.session_generation, this.centralPhone],
       );
       if (!session) return null;
-      if (!same(c.reply_digest, this.mac(id + ":" + code))) {
+      const valid =
+        confirmationToken === undefined
+          ? same(c.reply_digest, this.mac(id + ":" + code))
+          : typeof c.reply_digest === "string" &&
+            same(
+              confirmationToken,
+              this.mac("confirm-link:" + id + ":" + c.reply_digest),
+            );
+      if (!valid) {
         await db.query(
           "UPDATE wa_challenges SET attempts=attempts+1,state=CASE WHEN attempts+1>=5 THEN 'locked' ELSE state END WHERE id=$1",
           [id],
@@ -312,7 +346,7 @@ export class WhatsAppAuth {
           this.centralPhone,
         ],
       );
-      if (!row || !this.allowed.has(row.phone)) fail("exchange_invalid");
+      if (!row || !this.accepts(row.phone)) fail("exchange_invalid");
       return {
         phone: row.phone,
         purpose: row.purpose,

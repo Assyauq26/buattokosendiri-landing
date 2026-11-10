@@ -87,7 +87,7 @@ export function createWhatsAppServer({ auth, sessions, notifications }) {
           () => auth.status(token, input),
         ],
         "auth/finish": [
-          ["id", "browserProof", "code"],
+          ["id", "browserProof", "code", "confirmationToken"],
           () => auth.finish(token, input),
         ],
         "auth/exchange": [

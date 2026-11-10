@@ -40,7 +40,7 @@ export class AuthDelivery {
         await db.query(`SELECT d.* FROM wa_auth_deliveries d JOIN wa_sessions s ON s.provider_id=d.session_id
         WHERE d.state='queued' AND s.connection_enabled AND s.state='ready' ORDER BY d.created_at,d.id LIMIT 1`);
       if (!delivery) return { state: "idle" };
-      if (!this.auth.allowed.has(delivery.phone)) {
+      if (!this.auth.accepts(delivery.phone)) {
         await db.query(
           "UPDATE wa_auth_deliveries SET state='cancelled',payload_sealed=NULL WHERE id=$1",
           [delivery.id],

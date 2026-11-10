@@ -65,6 +65,50 @@ test(
         enabled: true,
         allowedRecipients: [phone],
       });
+      await t.test(
+        "public admission is explicit and retains tenant authorization",
+        async () => {
+          const publicService = new WhatsAppAuth({
+            pool,
+            secret,
+            webhookSecret: secret,
+            centralPhone: central,
+            enabled: true,
+            publicAuth: true,
+          });
+          assert.equal(publicService.accepts("+6281234567890"), true);
+          await assert.rejects(
+            publicService.start("f".repeat(64), {
+              phone: "+6281234567890",
+              browserProof,
+            }),
+            /access_denied/,
+          );
+          const request = await publicService.start(token, {
+            phone: "+6281234567890",
+            browserProof,
+          });
+          assert.ok(request.id);
+          await assert.rejects(
+            publicService.start(token, {
+              phone: "+6281234567890",
+              browserProof,
+            }),
+            /cooldown/,
+          );
+          const closed = new WhatsAppAuth({
+            pool,
+            secret,
+            webhookSecret: secret,
+            centralPhone: central,
+            enabled: true,
+          });
+          await assert.rejects(
+            closed.start(token, { phone: "+6281234567890", browserProof }),
+            /whatsapp_unavailable/,
+          );
+        },
+      );
       const start = () => service.start(token, { phone, browserProof });
       const reset = async () => {
         await pool.query(
@@ -123,7 +167,7 @@ test(
           delivery.id,
           delivery.payload_sealed,
         );
-        const code = /verifikasi Toko Uji: (\d{6})/.exec(plaintext)[1];
+        const code = /Kode cadangan: (\d{6})/.exec(plaintext)[1];
         assert.ok(!delivery.payload_sealed.includes(code));
         return { code, event };
       };
@@ -195,6 +239,95 @@ test(
             (await pool.query("SELECT count(*)::int AS n FROM wa_exchanges"))
               .rows[0].n,
             0,
+          );
+        },
+      );
+      await t.test(
+        "confirmation link is browser-bound, one-use and expires with the OTP",
+        async () => {
+          await reset();
+          const challenge = await start();
+          await reply(challenge);
+          await sent(challenge.id);
+          const {
+            rows: [delivery],
+          } = await pool.query(
+            "SELECT * FROM wa_auth_deliveries WHERE challenge_id=$1",
+            [challenge.id],
+          );
+          const message = service.vault.open(
+            delivery.id,
+            delivery.payload_sealed,
+          );
+          const url = new URL(message.match(/https:\/\/[^\s]+/)[0]);
+          assert.equal(url.origin, "https://" + tenant + ".test");
+          assert.equal(url.pathname, "/whatsapp");
+          assert.equal(url.search, "");
+          const confirmationToken = url.hash.split(".")[1];
+          const input = { id: challenge.id, browserProof, confirmationToken };
+          await assert.rejects(
+            service.finish(token, {
+              ...input,
+              browserProof: randomBytes(32).toString("hex"),
+            }),
+            /challenge_invalid/,
+          );
+          await assert.rejects(
+            service.finish(otherToken, input),
+            /challenge_invalid/,
+          );
+          await assert.rejects(
+            service.finish(token, {
+              ...input,
+              confirmationToken: "0".repeat(64),
+            }),
+            /challenge_invalid/,
+          );
+          await assert.rejects(
+            service.finish(token, { ...input, code: "123456" }),
+            /challenge_invalid/,
+          );
+          assert.equal(
+            (
+              await pool.query("SELECT state FROM wa_challenges WHERE id=$1", [
+                challenge.id,
+              ])
+            ).rows[0].state,
+            "reply_sent",
+          );
+          const outcomes = await Promise.allSettled([
+            service.finish(token, input),
+            service.finish(token, input),
+          ]);
+          assert.equal(
+            outcomes.filter((x) => x.status === "fulfilled").length,
+            1,
+          );
+          await assert.rejects(
+            service.finish(token, input),
+            /challenge_invalid/,
+          );
+          await reset();
+          const expired = await start();
+          const { code } = await reply(expired);
+          await sent(expired.id);
+          const expToken = service.mac(
+            "confirm-link:" +
+              expired.id +
+              ":" +
+              service.mac(expired.id + ":" + code),
+          );
+          await pool.query(
+            "UPDATE wa_challenges SET expires_at=now()-interval '1 second' WHERE id=$1",
+            [expired.id],
+          );
+          await assert.rejects(
+            service.finish(token, {
+              id: expired.id,
+              browserProof,
+              confirmationToken: expToken,
+            }),
+            /challenge_invalid/,
           );
         },
       );
