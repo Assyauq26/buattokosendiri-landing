@@ -42,7 +42,13 @@ const notifications = new Notifications({
 const authWorker = new AuthDelivery({ auth, gateway }),
   notificationWorker = new NotificationDelivery({ notifications });
 let stopping = false;
+let nextCentralPoll = 0;
 async function syncCentral() {
+  // OpenWA's default hourly budget is shared by status, pairing and sends.
+  // A three-second central poll alone exceeds that budget. Deliveries retain
+  // their own immediate connection checks; idle status needs only 30 seconds.
+  if (Date.now() < nextCentralPoll) return;
+  nextCentralPoll = Date.now() + 30000;
   const {
     rows: [s],
   } = await pool.query("SELECT * FROM wa_sessions WHERE purpose='central'");

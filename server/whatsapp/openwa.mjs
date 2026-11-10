@@ -52,8 +52,12 @@ export class OpenWA {
     this.origin = origin;
     this.apiKey = apiKey;
     this.fetcher = fetcher;
+    this.retryUntil = 0;
   }
   async request(path, { method = "GET", body, key, send = false } = {}) {
+    // All tenants share this private provider client. Respect a provider-wide
+    // cooldown instead of letting polling or a different route amplify a 429.
+    if (Date.now() < this.retryUntil) reject("gateway_rate_limited");
     try {
       const response = await this.fetcher(this.origin + "/api" + path, {
         method,
@@ -66,6 +70,15 @@ export class OpenWA {
         },
         body: body === undefined ? undefined : JSON.stringify(body),
       });
+      if (response.status === 429) {
+        const seconds = Number(response.headers.get("retry-after"));
+        this.retryUntil =
+          Date.now() +
+          (Number.isFinite(seconds) && seconds > 0
+            ? Math.min(Math.ceil(seconds), 3600)
+            : 60) *
+            1000;
+      }
       const reader = response.body?.getReader();
       let size = 0;
       const parts = [];

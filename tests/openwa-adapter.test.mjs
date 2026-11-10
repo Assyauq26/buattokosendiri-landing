@@ -70,9 +70,54 @@ test("operator private gateway origin and session identifiers are bounded", asyn
     assert.throws(() => normalizePhone(value));
 });
 test("fresh provider session can start pairing without being treated as invalid", async () => {
-  const gateway = new OpenWA({origin: "http://openwa:2785", apiKey: key,
-    fetcher: async () => Response.json({id, status: "created", phone: null, engineLoaded: false})});
-  assert.deepEqual(await gateway.status(id), {status: "disconnected", phone: null, loaded: false, connectedAt: null});
+  const gateway = new OpenWA({
+    origin: "http://openwa:2785",
+    apiKey: key,
+    fetcher: async () =>
+      Response.json({
+        id,
+        status: "created",
+        phone: null,
+        engineLoaded: false,
+      }),
+  });
+  assert.deepEqual(await gateway.status(id), {
+    status: "disconnected",
+    phone: null,
+    loaded: false,
+    connectedAt: null,
+  });
+});
+
+test("provider cooldown prevents cross-route polling and sending until Retry-After", async (t) => {
+  t.mock.timers.enable({ apis: ["Date"], now });
+  let calls = 0;
+  const gateway = new OpenWA({
+    origin: "http://openwa:2785",
+    apiKey: key,
+    fetcher: async () =>
+      ++calls === 1
+        ? Response.json(
+            { message: "Too Many Requests" },
+            { status: 429, headers: { "Retry-After": "60" } },
+          )
+        : Response.json({
+            id,
+            status: "ready",
+            phone: "6282211700060",
+            engineLoaded: true,
+          }),
+  });
+  await assert.rejects(gateway.status(id));
+  await assert.rejects(gateway.status(id), { code: "gateway_rate_limited" });
+  await assert.rejects(gateway.sendText(id, "+6281575652263", "test", key), {
+    code: "gateway_rate_limited",
+    outcome: "not_submitted",
+  });
+  assert.equal(calls, 1);
+  t.mock.timers.tick(60001);
+  assert.equal((await gateway.status(id)).status, "ready");
+  assert.equal(calls, 2);
 });
 
 test("provider send uses stable idempotency and never claims delivered", async () => {

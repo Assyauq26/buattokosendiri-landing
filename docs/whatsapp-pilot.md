@@ -42,3 +42,21 @@ session volumes and audit state. Never restore production database automatically
 Local evidence: adapter, PostgreSQL auth/notification, HTTP and pairing tests.
 These are mocks and do not establish real pairing, delivery or restart recovery.
 Record real evidence separately after owner action; no general rollout yet.
+
+## Tencent pilot evidence, 2026-11-10
+
+The isolated relay at commit `f7a3fe66791cc4039de781f92c303d3f7f7f26fd`
+is active through the bounded HTTPS WhatsApp prefix. Existing platform/store,
+email relay, databases and proxy container identities were preserved. Anonymous
+session requests return 401; the provider and private operator pairing listener
+remain inaccessible through that public route. Configuration and database backup
+and a route/service rollback are retained on the operator host.
+
+First pairing exposed a real adapter mismatch: OpenWA returns `created` for a new
+session before it starts. The adapter now treats that state as disconnected rather
+than rejecting it. The regression test plus the full 35-test relay suite pass.
+
+The owner confirmed central number pairing. Read-only provider/registry checks
+confirmed `ready`, the expected central phone, and no remaining QR. This proves
+connection only, not message delivery or authentication completion. Seller pairing
+and actual test delivery remain outstanding; no general enrollment is enabled.
