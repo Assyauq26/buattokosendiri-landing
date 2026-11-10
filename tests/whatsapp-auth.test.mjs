@@ -74,7 +74,7 @@ test(
           "UPDATE wa_tenants SET paused=false,auth_enabled=true",
         );
       };
-      const envelope = (challenge) => {
+      const envelope = (challenge, identity = {}) => {
         const message = new URL(challenge.whatsappUrl).searchParams.get("text");
         const body = {
           event: "message.received",
@@ -92,6 +92,7 @@ test(
             type: "text",
             timestamp: Math.floor(Date.now() / 1000),
             body: message,
+            ...identity,
           },
         };
         const raw = Buffer.from(JSON.stringify(body));
@@ -147,6 +148,53 @@ test(
           await assert.rejects(
             service.start(token, { phone: "+6281234567890", browserProof }),
             /pilot_recipient_required/,
+          );
+        },
+      );
+      await t.test(
+        "resolved LID queues only the challenge bound to its proven phone",
+        async () => {
+          await reset();
+          const challenge = await start();
+          const identity = {
+            from: "999999999999999@lid",
+            chatId: "999999999999999@lid",
+            isLidSender: true,
+            senderPhone: phone.slice(1),
+          };
+          const wrong = envelope(challenge, {
+            ...identity,
+            senderPhone: "6289999999999",
+          });
+          await assert.rejects(
+            service.receive(wrong.raw, wrong.headers),
+            /pilot_recipient_required/,
+          );
+          const event = envelope(challenge, identity);
+          assert.deepEqual(await service.receive(event.raw, event.headers), {
+            queued: true,
+          });
+          assert.deepEqual(await service.receive(event.raw, event.headers), {
+            ignored: true,
+          });
+          const result = await pool.query(
+            "SELECT state,phone FROM wa_challenges WHERE id=$1",
+            [challenge.id],
+          );
+          assert.equal(result.rows[0].state, "reply_queued");
+          assert.equal(result.rows[0].phone, phone);
+          assert.equal(
+            (
+              await pool.query(
+                "SELECT count(*)::int AS n FROM wa_auth_deliveries",
+              )
+            ).rows[0].n,
+            1,
+          );
+          assert.equal(
+            (await pool.query("SELECT count(*)::int AS n FROM wa_exchanges"))
+              .rows[0].n,
+            0,
           );
         },
       );

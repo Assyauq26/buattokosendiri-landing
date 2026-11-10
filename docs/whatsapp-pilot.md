@@ -60,3 +60,27 @@ The owner confirmed central number pairing. Read-only provider/registry checks
 confirmed `ready`, the expected central phone, and no remaining QR. This proves
 connection only, not message delivery or authentication completion. Seller pairing
 and actual test delivery remain outstanding; no general enrollment is enabled.
+
+## Resolved private sender IDs, 2026-11-10
+
+The real customer challenge reached OpenWA but the relay rejected its private
+`@lid` sender ID before creating a reply. OpenWA 0.29.1 retains this ID and adds
+`senderPhone` from its engine resolver when `RESOLVE_LID_TO_PHONE=true` (verified
+on the pilot). The adapter now accepts that digits-only phone only for a direct,
+fresh, unforwarded message explicitly marked `isLidSender=true` within the
+verified signed webhook. LID digits are never interpreted as a phone number.
+Phone-JID disagreement, unresolved LID, modified signatures, other sessions,
+recipient allowlist and browser/tenant/purpose binding remain rejected.
+
+Local regression: 38 tests pass, including PostgreSQL resolved-LID receive,
+deduplication and no authentication exchange until secret-code verification.
+The owner must create a fresh challenge after deployment; expired challenges
+are not replayed or extended. Live reply and browser completion are pending.
+
+Both central and seller pairings were verified ready with expected phones.
+Provider polling was reduced to 30 seconds, and Retry-After is honored across
+all provider routes. Operator pairing is disabled after use. A single authorized
+synthetic notification was submitted once (duplicate enqueue deduplicated),
+with encrypted message payload erased after submission. Delivery has not yet
+been confirmed; no blind resend is permitted. Notification preferences and
+synthetic consent were restored after the test.

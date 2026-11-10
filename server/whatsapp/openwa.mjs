@@ -277,10 +277,19 @@ export function incomingIdentity(event, destinationPhone, now = Date.now()) {
     m.body.length > 512
   )
     reject("message_not_eligible");
-  const number = /^([1-9][0-9]{7,14})@c\.us$/.exec(m.from || "")?.[1];
-  // Only the provider's authenticated, resolved phone identity is accepted.
-  // Unresolved @lid digits must never be treated as a phone number.
-  if (!number || (m.isLidSender && m.senderPhone !== number))
+  const phoneJid = /^([1-9][0-9]{7,14})@c\.us$/.exec(m.from || "")?.[1];
+  // OpenWA 0.29.1 retains the LID in from/chatId and attaches senderPhone
+  // after engine resolution. This metadata is trusted only inside the signed
+  // provider envelope; never interpret LID digits as a phone number.
+  const resolvedLid =
+    m.isLidSender === true &&
+    /^[0-9]{1,32}@lid$/.test(m.from || "") &&
+    typeof m.senderPhone === "string" &&
+    /^[1-9][0-9]{7,14}$/.test(m.senderPhone)
+      ? m.senderPhone
+      : undefined;
+  const number = phoneJid || resolvedLid;
+  if (!number || (phoneJid && m.isLidSender && m.senderPhone !== phoneJid))
     reject("sender_unresolved");
   return { phone: "+" + number, body: m.body, messageId: m.id };
 }

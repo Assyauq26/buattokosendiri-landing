@@ -231,6 +231,51 @@ test("only fresh direct unforwarded incoming messages with proven phone identity
     "+6281575652263",
   );
 });
+test("signed OpenWA resolved LID uses proven phone, never private ID digits", () => {
+  const event = incoming();
+  Object.assign(event.data, {
+    from: "999999999999999@lid",
+    chatId: "999999999999999@lid",
+    isLidSender: true,
+    senderPhone: "6281575652263",
+  });
+  const { raw, headers } = signed(event);
+  assert.equal(
+    incomingIdentity(
+      verifyWebhook(raw, headers, key, now),
+      "+6282211700060",
+      now,
+    ).phone,
+    "+6281575652263",
+  );
+  for (const change of [
+    { isLidSender: false },
+    { isLidSender: "true" },
+    { senderPhone: null },
+    { senderPhone: 6281575652263 },
+    { senderPhone: "+6281575652263" },
+    { senderPhone: "6281575652263@c.us" },
+    { senderPhone: "6281575652263\n" },
+    { from: "untrusted@lid", chatId: "untrusted@lid" },
+    { from: "123@g.us", chatId: "123@g.us" },
+    { chatId: "other@lid" },
+    { fromMe: true },
+    { isGroup: true },
+    { author: "999999999999999@lid" },
+    { isForwarded: true },
+    { timestamp: now / 1000 - 181 },
+  ]) {
+    const bad = structuredClone(event);
+    Object.assign(bad.data, change);
+    assert.throws(() => incomingIdentity(bad, "+6282211700060", now));
+  }
+  const tampered = JSON.parse(raw);
+  tampered.data.senderPhone = "6289999999999";
+  assert.throws(() =>
+    verifyWebhook(Buffer.from(JSON.stringify(tampered)), headers, key, now),
+  );
+});
+
 test("pairing QR stays private data and cannot inject HTML or external image URL", async () => {
   for (const qrCode of [
     "https://evil.test/qr",
