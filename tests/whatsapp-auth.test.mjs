@@ -4,6 +4,7 @@ import { createHash, createHmac, randomBytes, randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import pg from "pg";
 import { WhatsAppAuth } from "../server/whatsapp/auth.mjs";
+import { SellerSessions } from "../server/whatsapp/sessions.mjs";
 import { AuthDelivery } from "../server/whatsapp/auth-delivery.mjs";
 
 const database = process.env.WA_TEST_DATABASE_URL;
@@ -77,6 +78,8 @@ test(
             publicAuth: true,
           });
           assert.equal(publicService.accepts("+6281234567890"), true);
+        const admission=new SellerSessions({auth:publicService,gateway:{},enabled:true});
+        assert.equal((await admission.tenant(pool,token)).id,tenant);
           await assert.rejects(
             publicService.start("f".repeat(64), {
               phone: "+6281234567890",

@@ -14,7 +14,7 @@ export class SellerSessions {
     this.enabled = enabled;
   }
   async tenant(db, token) {
-    if (!this.enabled || !this.auth.allowed.size) fail("whatsapp_unavailable");
+    if (!this.enabled || (!this.auth.publicAuth && !this.auth.allowed.size)) fail("whatsapp_unavailable");
     if (!/^[a-f0-9]{64}$/.test(token || "")) fail("access_denied");
     const {
       rows: [tenant],
