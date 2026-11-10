@@ -173,6 +173,9 @@ def prepare(sha):
             time.sleep(2)
     else:
         dc('stop'); raise RuntimeError('provider_not_ready')
+    # Provider resolves callback DNS while validating a webhook. Start the empty
+    # relay first so its private service alias exists. No sessions are connected.
+    dc('up', '-d', '--no-build', 'relay')
     # One-time registry setup: does not connect sessions or send any message.
     dc('run', '--rm', '--no-deps', 'relay', 'node', 'server/whatsapp/provision-pilot.mjs')
     print('PILOT_REGISTRY_READY', flush=True)
@@ -193,6 +196,7 @@ def resume_private(j):
     if j['state'] != 'preparing' or snapshot() != j['services'] or hashlib.sha256(CADDY.read_bytes()).hexdigest() != j['caddyBefore']:
         raise RuntimeError('preparation_changed')
     sql('GRANT CONNECT ON DATABASE platform TO btos_whatsapp;')
+    dc('up', '-d', '--no-build', 'relay')
     dc('run', '--rm', '--no-deps', 'relay', 'node', 'server/whatsapp/provision-pilot.mjs')
     dc('up', '-d', '--no-build', 'relay')
     time.sleep(3)
