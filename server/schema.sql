@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS pairings (
  digest text PRIMARY KEY, store_id uuid NOT NULL REFERENCES stores(id), expires_at timestamptz NOT NULL,
  consumed_at timestamptz, agent_id uuid REFERENCES agents(id)
 );
+ALTER TABLE pairings ADD COLUMN IF NOT EXISTS release jsonb;
 CREATE TABLE IF NOT EXISTS jobs (
  id uuid PRIMARY KEY, store_id uuid NOT NULL UNIQUE REFERENCES stores(id), agent_id uuid NOT NULL REFERENCES agents(id),
  release jsonb NOT NULL, state text NOT NULL DEFAULT 'queued' CHECK (state IN ('queued','running','waiting_dns','failed','complete')),

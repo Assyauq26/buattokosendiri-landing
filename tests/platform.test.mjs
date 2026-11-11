@@ -15,6 +15,7 @@ const setup = {
 };
 let dnsStatus = "ready";
 let app, origin, base, cfg;
+let discoveredRelease, discoveryCalls = 0;
 const release = {
   repository: "Assyauq26/buattokoonline",
   version: "v1.0.0",
@@ -47,6 +48,7 @@ before(async () => {
   app = createApp({
     pool,
     config: cfg,
+    resolveInstallerRelease: async () => { discoveryCalls++; if (discoveredRelease instanceof Error) throw discoveredRelease; return discoveredRelease; },
     checkDns: async () => dnsStatus,
     sendMail: async (address, code, id) => sent.set(id, { address, code }),
   });
@@ -58,6 +60,29 @@ after(async () => {
   if (app) await new Promise((r) => app.close(r));
   await pool.end();
 });
+test("latest release is pinned at issuance, persists across a new release, and lookup failures do not fall back", async () => {
+  const owner=await session(pool,"latest-owner@example.com"); const headers={Cookie:owner.cookie};
+  await req("/store",{...setup,name:"Latest Store",domain:"latest.example.com",adminEmail:"latest-owner@example.com"},headers);
+  const old=cfg.installerLatest;cfg.installerLatest=true;
+  try {
+    discoveredRelease={...release,version:"v1.7.2",sha:"b".repeat(40)};
+    const issued=await req("/pairing",{},headers);assert.equal(issued.status,200);assert.equal(issued.body.release.version,"v1.7.2");
+    const token=/\n([a-f0-9]{64})\nBTOS_ENROLLMENT/.exec(issued.body.command)[1];
+    discoveredRelease=new Error("GitHub unavailable");
+    assert.equal((await req("/pairing",{},headers)).status,503);
+    assert.equal((await pool.query("SELECT count(*)::int n FROM pairings WHERE digest=$1",[createHash('sha256').update(token).digest('hex')])).rows[0].n,1);
+    discoveredRelease={...release,version:"v1.7.3",sha:"c".repeat(40)};
+    const calls=discoveryCalls,credential=randomBytes(32).toString('hex');
+    assert.equal((await req("/agent/pair",{token,credential,protocol:2,ipv4:setup.vpsIpv4})).status,200);
+    const job=(await req("/agent/job",null,{Authorization:"Bearer "+credential})).body.job;
+    assert.equal(job.release.version,"v1.7.2");assert.equal(job.release.sha,"b".repeat(40));assert.equal(discoveryCalls,calls);
+    const pending=await session(pool,"unsigned-release@example.com");
+    await req("/store",{...setup,name:"Unsigned",domain:"unsigned.example.com",adminEmail:"unsigned-release@example.com"},{Cookie:pending.cookie});
+    cfg.local=false;
+    assert.equal((await req("/pairing",{},{Cookie:pending.cookie})).status,503,'production requires operator-signed approval');
+  } finally {cfg.installerLatest=old;cfg.local=true;discoveredRelease=undefined;}
+});
+
 test("one-paste enrollment is the default for ordinary sellers without an email allowlist", async () => {
   for (const address of ["public-first@example.com", "public-second@example.com"]) {
     const owner = await session(pool, address);
