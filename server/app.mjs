@@ -1,5 +1,6 @@
 import { sellerOtpMessage } from "./seller-otp-mail.mjs";
 import { storeReleases } from "./store-releases.mjs";
+import { createLatestInstallerResolver } from "./latest-installer.mjs";
 import { controlAuthorized, lookupMailTenant, provisionMail, rotateMail, mailBrand, verifyMailReceipt, syncMailBrand } from "./mail-tenants.mjs";
 import { createServer } from "node:http";
 import {
@@ -75,7 +76,7 @@ function domain(value) {
     reject(422, "Gunakan domain toko milik Anda sendiri.");
   return value;
 }
-export function createApp({ pool, config, sendMail, checkDns = checkStoreDns }) {
+export function createApp({ pool, config, sendMail, checkDns = checkStoreDns, resolveInstallerRelease = createLatestInstallerResolver() }) {
   const passwordVault = installerPasswordVault(config.secret);
   const installerTestEmails = config.installerTestEmails || [];
   const canSignIn = (email) => !config.sellerPilotOnly || installerTestEmails.includes(email);
@@ -199,7 +200,7 @@ export function createApp({ pool, config, sendMail, checkDns = checkStoreDns }) 
       return reply(200, {
         ok: true,
         otpConfigured: Boolean(config.resendKey),
-        installerEnabled: config.releases.length > 0,
+        installerEnabled: Boolean(config.installerLatest || config.releases.length),
       });
     }
     if (route === "/store-releases" && req.method === "GET") {
@@ -350,7 +351,7 @@ export function createApp({ pool, config, sendMail, checkDns = checkStoreDns }) 
             409,
             "Toko sudah memiliki agent. Pemulihan memerlukan operator.",
           );
-        const release = config.releases[0];
+        const release = pair.release || config.releases[0];
         if (!release) reject(503, "Rilis installer belum disetujui.");
         const id = randomUUID();
         await db.query(
@@ -649,11 +650,22 @@ export function createApp({ pool, config, sendMail, checkDns = checkStoreDns }) 
     }
     if (route === "/pairing" && req.method === "POST") {
       await rate("pairing-seller:" + user.id, 10, 3600);
-      if (!config.releases.length)
-        reject(
-          503,
-          "Installer belum dibuka: operator perlu menetapkan rilis yang disetujui.",
-        );
+      const currentStore = await pool.query("SELECT s.id FROM stores s WHERE s.seller_id=$1 AND s.vps_ipv4 IS NOT NULL AND s.admin_password_sealed IS NOT NULL AND NOT EXISTS(SELECT 1 FROM agents a WHERE a.store_id=s.id AND a.retired_at IS NULL)", [user.id]);
+      if (!currentStore.rowCount) reject(422, "Lengkapi Info Toko atau periksa instalasi yang sudah terhubung.");
+      let release;
+      try { release = config.installerLatest ? await resolveInstallerRelease() : config.releases[0]; }
+      catch { reject(503, "Versi stabil terbaru belum dapat diverifikasi. Coba lagi sebentar; installer tidak memakai versi lama."); }
+      if (!release) reject(503, "Rilis installer belum tersedia.");
+      if (config.installerLatest && !config.local) {
+        let approved;
+        try {
+          const signed = await storeReleases(config.storeCatalog, config.storeCatalogTrust);
+          const catalog = JSON.parse(Buffer.from(signed.payload, "base64").toString("utf8"));
+          approved = !catalog.revoked.includes(release.sha) && catalog.releases.find(item => item.channel === "stable" &&
+            "v" + item.version === release.version && item.sha === release.sha && item.digest === release.asset?.digest);
+        } catch { /* Fail closed while the operator publisher is unavailable. */ }
+        if (!approved) reject(503, "Versi terbaru sedang diverifikasi untuk instalasi. Coba lagi sebentar; versi lama tidak dipasang.");
+      }
       const raw = token();
       await tx(async (db) => {
         const {
@@ -680,18 +692,20 @@ export function createApp({ pool, config, sendMail, checkDns = checkStoreDns }) 
           [store.id],
         );
         await db.query(
-          "INSERT INTO pairings(digest,store_id,expires_at) VALUES($1,$2,now()+interval '15 minutes')",
-          [digest(raw), store.id],
+          "INSERT INTO pairings(digest,store_id,expires_at,release) VALUES($1,$2,now()+interval '15 minutes',$3)",
+          [digest(raw), store.id, release],
         );
       });
       // Legacy clients must opt in explicitly; the public wizard defaults to stdin.
       if (data.installer === "legacy") return reply(200, {
+        release: { version: release.version, sha: release.sha },
         token: raw,
         expiresIn: 900,
         command: `(bootstrap=$(mktemp) && trap 'rm -f -- "$bootstrap"' EXIT && curl --proto '=https' --tlsv1.2 -fsS ${config.origin}/bootstrap.sh -o "$bootstrap" && sudo bash "$bootstrap")`,
         instruction: "Tempel token saat terminal meminta token pairing.",
       });
       return reply(200, {
+        release: { version: release.version, sha: release.sha },
         expiresIn: 900,
         command: `(bootstrap=$(mktemp) && trap 'rm -f -- "$bootstrap"' EXIT && curl --proto '=https' --tlsv1.2 -fsS ${config.origin}/bootstrap.sh -o "$bootstrap" && sudo bash "$bootstrap" --enroll <<'BTOS_ENROLLMENT'\n${raw}\nBTOS_ENROLLMENT\n)`,
         instruction:
@@ -770,7 +784,7 @@ export function createApp({ pool, config, sendMail, checkDns = checkStoreDns }) 
         reject(405, "Metode tidak didukung.");
       const decoded = decodeURIComponent(url.pathname);
       if (decoded === "/bootstrap.sh") {
-        if (!config.releases.length)
+        if (!config.installerLatest && !config.releases.length)
           reject(503, "Rilis installer belum disetujui.");
         const agent = await readFile(path.join(ROOT, "agent/agent.py"));
         const script = (
@@ -785,7 +799,7 @@ export function createApp({ pool, config, sendMail, checkDns = checkStoreDns }) 
         return res.end(script);
       }
       if (decoded === "/agent.py") {
-        if (!config.releases.length)
+        if (!config.installerLatest && !config.releases.length)
           reject(503, "Rilis installer belum disetujui.");
         res.writeHead(200, {
           "Content-Type": "text/plain",

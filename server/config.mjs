@@ -24,6 +24,8 @@ export function config(env = process.env) {
   if (installerTestEmails.some((email) => !/^[^\s@,]+@[^\s@,]+\.[^\s@,]+$/.test(email)))
     throw Error("Invalid installer test account allowlist");
   const sellerPilotOnly = env.SELLER_PILOT_ONLY === "1";
+  const installerPolicy = env.INSTALLER_RELEASE_POLICY || "latest-stable";
+  if (!["latest-stable", "pinned"].includes(installerPolicy)) throw Error("Invalid installer release policy");
   const brandSyncStoreIds = (env.MAIL_BRAND_SYNC_STORE_IDS || "").split(",").map(value => value.trim()).filter(Boolean);
   if (brandSyncStoreIds.some(value => !/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(value)))
     throw Error("Invalid mail identity pilot scope");
@@ -52,6 +54,7 @@ export function config(env = process.env) {
     database: env.DATABASE_URL,
     resendKey: env.RESEND_API_KEY,
     releases,
+    installerLatest: installerPolicy === "latest-stable",
     installerTestEmails,
     sellerPilotOnly,
     brandSyncStoreIds,

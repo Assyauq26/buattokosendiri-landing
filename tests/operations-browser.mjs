@@ -17,7 +17,8 @@ const origin = "http://127.0.0.1:18184";
 const fixtures = [];
 const secret = "local-browser-only".repeat(3);
 const server = createApp({
-  pool, config: { origin, local: true, secret, releases: [{repository:"Assyauq26/buattokoonline",version:"v1.0.0",sha:"a".repeat(40),approved:true}] },
+  pool, config: { origin, local: true, secret, installerLatest: true, releases: [] },
+  resolveInstallerRelease: async () => ({ repository:"Assyauq26/buattokoonline", version:"v1.7.2", sha:"a".repeat(40), approved:true }),
   checkDns: async () => "ready",
   sendMail: async () => { throw Error("No mail in browser tests"); },
 });
@@ -75,6 +76,7 @@ try {
     assert.equal(await page.locator("#pair-token").count(),0);
     await page.getByRole("button",{name:"Siapkan instalasi",exact:true}).click();
     await page.locator("#pairing").waitFor({state:"visible"});
+    await page.getByText("Versi v1.7.2 siap dipasang.", {exact:true}).waitFor();
     assert.match(await page.locator("#command").inputValue(),/--enroll <<'BTOS_ENROLLMENT'/);
     assert.equal(await page.getByRole("button",{name:"Salin perintah",exact:true}).count(),1);
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true);

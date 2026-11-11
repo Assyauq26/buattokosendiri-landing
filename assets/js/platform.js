@@ -135,8 +135,12 @@
     panel(2);
   });
   bind("pair", async () => {
+    $("command").value = "";
+    $("installer-version").textContent = "";
+    $("pairing").hidden = true;
     const r = await api("/pairing", { installer: "stdin" });
     $("command").value = r.command;
+    $("installer-version").textContent = r.release?.version ? "Versi " + r.release.version + " siap dipasang." : "";
     $("pairing").hidden = false;
     message(
       r.instruction,

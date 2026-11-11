@@ -3,7 +3,7 @@ import {execFileSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
 const required=['index.html','admin/index.html','assets/js/operations.js','assets/css/operations.css','server/operations.mjs','pendaftaran/index.html','assets/js/platform.js','server/app.mjs','server/schema.sql','agent/agent.py','agent/bootstrap.sh','panduan-instalasi/index.html','panduan-instalasi/panduan-instalasi.pdf','persiapan-toko/index.html'];
 for(const f of required){if(!existsSync(f))throw Error('Missing '+f);}
-for(const f of ['server/config.mjs','server/app.mjs','server/main.mjs','server/migrate.mjs','server/operations.mjs','assets/js/operations.js','assets/js/platform.js'])execFileSync(process.execPath,['--check',f]);
+for(const f of ['server/config.mjs','server/app.mjs','server/main.mjs','server/migrate.mjs','server/operations.mjs','server/latest-installer.mjs','server/latest-installer-cli.mjs','assets/js/operations.js','assets/js/platform.js'])execFileSync(process.execPath,['--check',f]);
 for(const f of ['index.html','admin/index.html','pendaftaran/index.html','panduan-instalasi/index.html','persiapan-toko/index.html']){
  const content=readFileSync(f,'utf8');
  if(/staging\.buattokosendiri\.web\.id/.test(content))throw Error('Retired host reference');

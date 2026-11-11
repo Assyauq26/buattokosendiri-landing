@@ -1,0 +1,14 @@
+[Unit]
+Description=Verify latest official stable store release and refresh signed metadata
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /opt/btos-platform/current/deploy/refresh-store-catalog.py
+User=root
+UMask=0077
+TimeoutStartSec=240
+Nice=10
+StandardOutput=journal
+StandardError=journal
