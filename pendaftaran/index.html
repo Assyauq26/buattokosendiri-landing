@@ -143,7 +143,7 @@
               dari internet.
             </li>
             <li id="pair-instruction">
-              Siapkan instalasi, jalankan perintah di VPS, lalu tempel token saat diminta.
+              Siapkan instalasi, lalu tempel seluruh perintah sekali di terminal VPS.
             </li>
           </ol>
           <button class="button primary" id="pair">
@@ -154,17 +154,11 @@
             ><textarea
               id="command"
               readonly
-              rows="4"
+              rows="7"
               spellcheck="false"
             ></textarea
             ><button class="button secondary" id="copy-command">
               Salin perintah</button>
-            <div id="legacy-pairing" hidden>
-              <label for="pair-token">Token pairing pribadi</label>
-              <input id="pair-token" type="password" readonly autocomplete="off">
-              <button class="button secondary" id="copy-token" type="button">Salin token</button>
-              <p>Tempel token saat terminal memintanya.</p>
-            </div>
             <p class="hint">
               Perintah ini pribadi dan berlaku 15 menit. Jika terminal meminta password sudo, masukkan password VPS Anda.
             </p>
@@ -245,26 +239,6 @@
           </div>
         </section>
       </div>
-      <section id="service-requests" class="form-card" hidden aria-labelledby="request-title">
-        <h2 id="request-title">Permintaan layanan</h2>
-        <form id="service-request-form">
-          <label for="request-type">Jenis permintaan</label>
-          <select id="request-type" required>
-            <option value="reinstall">Instalasi ulang</option>
-            <option value="domain">Pindah domain</option>
-            <option value="ownership">Pindah pemilik</option>
-            <option value="close_store">Tutup toko</option>
-            <option value="delete_account">Hapus akun seller</option>
-            <option value="uninstall">Uninstall aplikasi di VPS</option>
-            <option value="purge">Penghapusan data pusat</option>
-          </select>
-          <label for="request-reason">Alasan</label>
-          <textarea id="request-reason" required minlength="8" maxlength="240" rows="3"></textarea>
-          <p>Permintaan akan ditinjau operator sebelum ada tindakan pada toko atau VPS Anda.</p>
-          <button type="submit" class="button secondary">Kirim permintaan</button>
-        </form>
-        <ul id="request-history"></ul>
-      </section>
       <footer class="form-footer">
         <span id="signed-in"></span>
         <button id="logout" class="text-button" hidden>Keluar</button>

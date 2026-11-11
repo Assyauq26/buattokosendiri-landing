@@ -42,7 +42,6 @@ before(async () => {
     releases: [release],
     sellerPilotOnly: false,
     installerTestEmails: ["pilot@example.com"],
-    onePasteEmails: ["ops-owner@example.com"],
     brandSyncStoreIds: [],
   };
   app = createApp({
@@ -59,6 +58,21 @@ after(async () => {
   if (app) await new Promise((r) => app.close(r));
   await pool.end();
 });
+test("one-paste enrollment is the default for ordinary sellers without an email allowlist", async () => {
+  for (const address of ["public-first@example.com", "public-second@example.com"]) {
+    const owner = await session(pool, address);
+    const headers = { Cookie: owner.cookie };
+    assert.equal((await req("/session", null, headers)).body.onePaste, true);
+    dnsStatus = "ready";
+    assert.equal((await req("/store", { ...setup, name: "Toko Umum", domain: address.split("@")[0] + ".example.com", adminEmail: address }, headers)).status, 200);
+    const result = await req("/pairing", {}, headers);
+    assert.equal(result.status, 200);
+    assert.equal(result.body.token, undefined);
+    assert.equal(result.body.expiresIn, 900);
+    assert.match(result.body.command, /sudo bash "\$bootstrap" --enroll <<'BTOS_ENROLLMENT'\n[a-f0-9]{64}\nBTOS_ENROLLMENT/);
+  }
+});
+
 test("operations role, concurrent one-paste enrollment, audited reset, and replacement fencing", async () => {
   const owner = await session(pool, "ops-owner@example.com");
   const support = await session(pool, "ops-support@example.com", "support");
@@ -121,7 +135,7 @@ test("operations role, concurrent one-paste enrollment, audited reset, and repla
   assert.equal((await pool.query("SELECT count(*)::int AS n FROM agents WHERE store_id=$1", [store.id])).rows[0].n, 0);
   assert.equal((await pool.query("SELECT count(*)::int AS n FROM installation_history WHERE store_id=$1", [store.id])).rows[0].n, 1);
   assert.equal((await req("/store", info, as(owner))).body.store.id, store.id);
-  const replacement = await req("/pairing", {}, as(owner));
+  const replacement = await req("/pairing", { installer: "legacy" }, as(owner));
   const fresh = await req("/agent/pair", {
     ...clients[win], token: replacement.body.token, credential: randomBytes(32).toString("hex"),
   });
@@ -134,7 +148,7 @@ test("sender synchronization is scoped, revision fenced, repeatable and rejects 
   dnsStatus = "ready";
   await req("/store", { name: "Nama Awal", domain: "sync.example.com", adminEmail: "sync-owner@example.com", ...setup },
     { Cookie: owner.cookie });
-  const pairing = await req("/pairing", {}, { Cookie: owner.cookie });
+  const pairing = await req("/pairing", { installer: "legacy" }, { Cookie: owner.cookie });
   const credential = randomBytes(32).toString("hex");
   const paired = await req("/agent/pair", { token: pairing.body.token, credential, protocol: 2, ipv4: setup.vpsIpv4 });
   const oldEnabled = cfg.mailEnabled;
@@ -247,7 +261,7 @@ test("OTP, sessions, tenant boundaries, pairing and durable completion", async (
     401,
   );
   const bob = await login("bob@example.com");
-  assert.equal((await req("/pairing", {}, { Cookie: bob })).status, 422);
+  assert.equal((await req("/pairing", { installer: "legacy" }, { Cookie: bob })).status, 422);
   const info = { name: "Toko Alice", domain: "alice.example.com", adminEmail: "alice@example.com", ...setup };
   dnsStatus = "pending";
   assert.equal((await req("/store/dns", info, { Cookie: alice })).body.ready, false);
@@ -300,7 +314,7 @@ test("OTP, sessions, tenant boundaries, pairing and durable completion", async (
     ).status,
     422,
   );
-  const pairing = await req("/pairing", {}, { Cookie: alice });
+  const pairing = await req("/pairing", { installer: "legacy" }, { Cookie: alice });
   assert.equal(pairing.status, 200);
   assert.ok(
     !pairing.body.command.includes(pairing.body.token),
@@ -413,7 +427,7 @@ test("pairing can reconnect a healthy installation for the same domain", async (
   const cookie = await login("reconnect@example.com");
   const domain = "reconnect.example.com";
   assert.equal((await req("/store", { ...setup, name: "Toko Lama", domain, adminEmail: "reconnect@example.com" }, { Cookie: cookie })).status, 200);
-  const pairing = await req("/pairing", {}, { Cookie: cookie });
+  const pairing = await req("/pairing", { installer: "legacy" }, { Cookie: cookie });
   const credential = randomBytes(32).toString("hex");
   const data = { token: pairing.body.token, credential, protocol: 2, ipv4: setup.vpsIpv4 };
   assert.equal((await req("/agent/pair", { ...data, existingDomain: "different.example.com" })).status, 409);
@@ -518,7 +532,7 @@ test("three tenants: concurrent provisioning, control authentication, lifecycle 
       const cookie = await login(address);
       const store = await req('/store', { ...setup, name: brand, domain: `mail-${index}.example.com`, adminEmail: address }, { Cookie: cookie });
       assert.equal(store.status, 200);
-      const pair = await req('/pairing', {}, { Cookie: cookie });
+      const pair = await req('/pairing', { installer: 'legacy' }, { Cookie: cookie });
       const credential = randomBytes(32).toString('hex');
       assert.equal((await req('/agent/pair', { token: pair.body.token, credential, protocol: 2, ipv4: setup.vpsIpv4 })).status, 200);
       const auth = { Authorization: `Bearer ${credential}` };

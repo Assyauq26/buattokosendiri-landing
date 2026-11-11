@@ -549,7 +549,7 @@ export function createApp({ pool, config, sendMail, checkDns = checkStoreDns }) 
       return reply(200, result);
     }
     if (route === "/session" && req.method === "GET")
-      return reply(200, { seller: user, consent: CONSENT, onePaste: (config.onePasteEmails || []).includes(user.email) });
+      return reply(200, { seller: user, consent: CONSENT, onePaste: true });
     if (route === "/logout" && req.method === "POST") {
       const raw =
         (req.headers.cookie || "")
@@ -684,7 +684,8 @@ export function createApp({ pool, config, sendMail, checkDns = checkStoreDns }) 
           [digest(raw), store.id],
         );
       });
-      if (data.installer !== "stdin" || !(config.onePasteEmails || []).includes(user.email)) return reply(200, {
+      // Legacy clients must opt in explicitly; the public wizard defaults to stdin.
+      if (data.installer === "legacy") return reply(200, {
         token: raw,
         expiresIn: 900,
         command: `(bootstrap=$(mktemp) && trap 'rm -f -- "$bootstrap"' EXIT && curl --proto '=https' --tlsv1.2 -fsS ${config.origin}/bootstrap.sh -o "$bootstrap" && sudo bash "$bootstrap")`,

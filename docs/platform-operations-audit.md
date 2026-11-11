@@ -162,7 +162,7 @@ baru melalui agent sah. Database restore memerlukan penilaian transaksi baru ter
 
 ## Bukti kandidat
 
-- Platform source/build dan 13 tes backend terkait lulus.
+- Platform source/build dan 14 tes backend terkait lulus.
 - Toko typecheck, production build dan 22 tes terarah lulus.
 - Relay HTTP/SQLite existing, 7 tes lulus.
 - Updater existing, 34 tes lokal lulus.
@@ -173,7 +173,19 @@ baru melalui agent sah. Database restore memerlukan penilaian transaksi baru ter
   serta overflow responsif diperiksa melalui entry point normal.
 
 Keseluruhan brief masih berstatus NOT READY untuk rilis penuh karena executor lifecycle,
-kontrol operator WA lengkap, pilot email nyata baru dan fresh-VPS end-to-end belum selesai.
+kontrol operator WA lengkap dan fresh-VPS end-to-end belum selesai.
 Kandidat ini dapat ditinjau dan diuji untuk milestone yang tersedia.
 
-Pilot terbatas: MAIL_BRAND_SYNC_STORE_IDS membatasi kapabilitas registry dan sinkronisasi nama ke tenant yang ditentukan operator. SINGLE_PASTE_SELLER_EMAILS membatasi wizard satu-paste; akun lainnya mempertahankan token/perintah legacy. Default kedua scope kosong. Aktivasi tidak membuka fleet otomatis.
+MAIL_BRAND_SYNC_STORE_IDS tetap membatasi sinkronisasi nama email ke tenant pilot Hubify.
+Pilot live nama Hubify dan email nyata sudah lulus; pemilik mengonfirmasi inbox serta From yang sesuai.
+
+Atas instruksi pemilik tanggal 11 November 2026, wizard satu-paste menjadi default untuk semua
+seller terautentikasi. Tidak ada lagi allowlist email untuk alur tersebut. SINGLE_PASTE_SELLER_EMAILS
+tidak digunakan. Endpoint pairing menghasilkan blok stdin secara default; hanya klien legacy
+yang meminta installer=legacy secara eksplisit menerima respons token terpisah.
+Wizard publik selalu meminta stdin dan tidak memuat kolom token/copy-token.
+Kartu Permintaan layanan dikeluarkan dari halaman pendaftaran; data, API dan tinjauan operator
+yang sudah ada dipertahankan. Browser menguji penerbitan blok lewat backend dan PostgreSQL nyata
+di 360/390/430/1440 px. Token disamarkan dalam screenshot uji.
+OTP, session, validasi DNS, token hash, TTL 15 menit, single-use, fencing, dan rate limit tetap berlaku.
+Perubahan ini tidak membuka fleet update, mengganti Resend quota, atau memperluas scope sinkronisasi email.

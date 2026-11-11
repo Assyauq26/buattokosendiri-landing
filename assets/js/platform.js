@@ -6,7 +6,6 @@
     current = null,
     busy = false,
     editing = false;
-  let onePaste = false;
   function message(text, error = false) {
     const el = $(error ? "error" : "notice");
     el.textContent = text;
@@ -56,27 +55,6 @@
   }
   function bind(id, fn) {
     $(id).addEventListener("click", () => action(fn));
-  }
-  $("service-request-form").addEventListener("submit", event => {
-    event.preventDefault();
-    action(async () => {
-      await api("/ops/request", { action: $("request-type").value, reason: $("request-reason").value });
-      $("request-reason").value = "";
-      message("Permintaan tercatat. Operator akan meninjaunya.");
-      await refreshRequests();
-    });
-  });
-  async function refreshRequests() {
-    $("service-requests").hidden = !authenticated || !current?.store;
-    if ($("service-requests").hidden) return;
-    const result = await api("/ops/my-requests");
-    const states = { requested: "Menunggu tinjauan", reviewed: "Ditinjau operator", rejected: "Ditolak" };
-    $("request-history").replaceChildren(...result.requests.map(request => {
-      const item = document.createElement("li");
-      const option = [...$("request-type").options].find(option => option.value === request.action);
-      item.textContent = (option?.textContent || request.action) + " · " + states[request.state];
-      return item;
-    }));
   }
   let mailIdentity = null;
   for (const actionName of ['identity', 'administrators', 'rotate', 'disable', 'enable']) bind('mail-' + actionName, async () => {
@@ -157,10 +135,8 @@
     panel(2);
   });
   bind("pair", async () => {
-    const r = await api("/pairing", { installer: onePaste ? "stdin" : "legacy" });
+    const r = await api("/pairing", { installer: "stdin" });
     $("command").value = r.command;
-    $("legacy-pairing").hidden = onePaste;
-    $("pair-token").value = r.token || "";
     $("pairing").hidden = false;
     message(
       r.instruction,
@@ -168,7 +144,6 @@
   });
   for (const [id, input] of [
     ["copy-command", "command"],
-    ["copy-token", "pair-token"],
   ])
     bind(id, async () => {
       try {
@@ -197,10 +172,7 @@
   bind("logout", async () => {
     await api("/logout", {});
     authenticated = false;
-    $("service-requests").hidden = true;
     $("command").value = "";
-    $("pair-token").value = "";
-    $("request-history").replaceChildren();
     current = null;
     location.reload();
   });
@@ -240,7 +212,6 @@
     if (!authenticated) return;
     const r = await api("/store");
     current = r;
-    await refreshRequests();
     if (!r.store || (!r.agent && !r.store.vps_ipv4)) {
       panel(2);
       return;
@@ -297,14 +268,10 @@
   }
   async function restore() {
     try {
-      const { seller, onePaste: enabled } = await api("/session");
+      const { seller } = await api("/session");
       authenticated = true;
       $("signed-in").textContent = seller.email;
       $("logout").hidden = false;
-      onePaste = Boolean(enabled);
-      $("pair-instruction").textContent = onePaste
-        ? "Siapkan instalasi, lalu tempel seluruh perintah sekali di terminal VPS."
-        : "Siapkan instalasi, jalankan perintah di VPS, lalu tempel token saat diminta.";
       $("admin-email").value = seller.email;
       const r = await api("/store");
       if (r.store) {
