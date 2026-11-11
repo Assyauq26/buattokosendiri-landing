@@ -24,6 +24,9 @@ export function config(env = process.env) {
   if (installerTestEmails.some((email) => !/^[^\s@,]+@[^\s@,]+\.[^\s@,]+$/.test(email)))
     throw Error("Invalid installer test account allowlist");
   const sellerPilotOnly = env.SELLER_PILOT_ONLY === "1";
+  const brandSyncStoreIds = (env.MAIL_BRAND_SYNC_STORE_IDS || "").split(",").map(value => value.trim()).filter(Boolean);
+  if (brandSyncStoreIds.some(value => !/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(value)))
+    throw Error("Invalid mail identity pilot scope");
   if (sellerPilotOnly && !installerTestEmails.length)
     throw Error("Pilot requires a test account allowlist");
   const trustedProxyIp = env.TRUST_PROXY === "1" ? env.TRUST_PROXY_IP : undefined;
@@ -51,6 +54,7 @@ export function config(env = process.env) {
     releases,
     installerTestEmails,
     sellerPilotOnly,
+    brandSyncStoreIds,
     port: Number(env.PORT || 8080),
     host: env.BIND_HOST || "127.0.0.1",
     trustedProxyIp,

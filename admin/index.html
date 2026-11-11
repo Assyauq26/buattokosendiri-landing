@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="robots" content="noindex,nofollow">
+    <title>Operasi Toko · Buattokosendiri</title>
+    <link rel="stylesheet" href="/assets/css/fonts.css">
+    <link rel="stylesheet" href="/assets/css/operations.css">
+    <script type="module" src="/assets/js/operations.js"></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <a href="/">Buattokosendiri</a>
+      <span>Operasi toko</span>
+    </header>
+    <main>
+      <a id="back" href="/admin/" hidden>← Semua tenant</a>
+      <div class="heading">
+        <div><h1 id="title">Tenant &amp; instalasi</h1><p id="description">Registry toko, progres instalasi, dan koneksi agent.</p></div>
+        <p id="role" class="badge" hidden></p>
+      </div>
+      <p id="status" role="status">Memuat data…</p>
+      <section id="signin" class="panel" hidden aria-labelledby="signin-title">
+        <h2 id="signin-title">Masuk dengan email operator</h2>
+        <form id="email-form">
+          <label>Email <input id="email" type="email" required autocomplete="email"></label>
+          <label class="check"><input type="checkbox" required> Saya menyetujui <a href="/kebijakan-privasi/">kebijakan privasi</a>.</label>
+          <button type="submit">Kirim OTP</button>
+        </form>
+        <form id="code-form" hidden>
+          <label>Kode OTP <input id="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" required maxlength="6"></label>
+          <button type="submit">Masuk</button>
+        </form>
+      </section>
+      <section id="listing" hidden aria-labelledby="title">
+        <dl id="summary" class="metrics"></dl>
+        <details class="panel"><summary>Distribusi versi</summary><dl id="versions" class="facts"></dl></details>
+        <details id="releases" class="panel"><summary>Rilis terverifikasi</summary><div id="release-list"></div></details>
+        <section id="integrations" class="panel" aria-label="WhatsApp dan notifikasi"></section>
+        <form class="filters" method="get" action="/admin/">
+          <label>Cari tenant <input id="q" name="q" placeholder="Nama, domain, email, atau ID" maxlength="120"></label>
+          <label>Instalasi <select id="state" name="state">
+            <option value="">Semua status</option><option value="queued">Antrean</option>
+            <option value="running">Berjalan</option><option value="waiting_dns">Menunggu domain</option>
+            <option value="failed">Gagal</option><option value="complete">Selesai</option>
+          </select></label>
+          <label>Versi <input id="version" name="version" placeholder="v1.7.0" maxlength="13"></label>
+          <label>Heartbeat <select id="heartbeat" name="heartbeat">
+            <option value="">Semua</option><option value="recent">Terbaru</option>
+            <option value="late">Terlambat</option><option value="missing">Belum terhubung</option>
+          </select></label>
+          <button type="submit">Terapkan</button>
+        </form>
+        <div id="tenants" class="panel tenant-list"></div>
+        <nav id="pagination" aria-label="Halaman tenant"></nav>
+      </section>
+      <section id="detail" hidden aria-labelledby="title">
+        <div id="details" class="sections"></div>
+        <section id="actions" class="panel" hidden>
+          <h2>Tindakan operator</h2>
+          <form id="action-form">
+            <label>Tindakan <select id="action" required></select></label>
+            <label>Alasan <textarea id="reason" required minlength="8" maxlength="240" rows="3"></textarea></label>
+            <div id="confirm-group" hidden>
+              <p id="impact"></p>
+              <label>Ketik ID tenant <input id="confirm" autocomplete="off"></label>
+            </div>
+            <button type="submit">Jalankan tindakan</button>
+          </form>
+        </section>
+      </section>
+    </main>
+  </body>
+</html>

@@ -21,11 +21,14 @@ import time
 import urllib.error
 import urllib.request
 import unicodedata
+import sqlite3
+from datetime import datetime, timezone
 
 BASE = Path('/etc/btos-agent')
 WORK = Path('/opt/btos-agent')
 REPOSITORY = 'Assyauq26/buattokoonline'
 ORIGIN = 'https://buattokosendiri.web.id'
+AGENT_VERSION = '1.1.0'
 
 
 def save(path, data):
@@ -150,6 +153,7 @@ class Reporter:
 
     def event(self, stage, state='running', evidence=None):
         self.flush()
+        self.state['stage'] = stage
         self.state['pending'] = {'jobId': self.job['id'], 'sequence': self.state['sequence'] + 1,
             'stage': stage, 'state': state, 'evidence': evidence or {}}
         save(self.path, self.state)
@@ -286,7 +290,7 @@ def install(config, job, store, report):
         'version': release['version'], 'source_sha': release['sha']})
 
 
-def setup():
+def setup(token_stdin=False):
     existing = installed_store()
     if not existing and not (BASE / 'config.json').exists():
         if any(path.exists() or path.is_symlink() for path in (
@@ -302,10 +306,35 @@ def setup():
         os.chmod(directory, 0o700)
     config_path = BASE / 'config.json'
     config = read(config_path) if config_path.exists() else {'credential': secrets.token_hex(32)}
-    save(config_path, config)  # persisted before network for idempotent pairing retries
-    pairing = getpass.getpass('Token pairing dari wizard (input disembunyikan): ')
+    pairing = (sys.stdin.readline(66).strip() if token_stdin else
+               getpass.getpass('Token pairing dari wizard (input disembunyikan): '))
     if not re.fullmatch('[a-f0-9]{64}', pairing):
         raise RuntimeError('INVALID_PAIRING_TOKEN')
+    pairing_hash = hashlib.sha256(pairing.encode()).hexdigest()
+    if config_path.exists():
+        try:
+            previous = api(config, 'job')
+        except urllib.error.HTTPError as error:
+            if error.code != 401:
+                raise
+            if config.get('pairingHash') != pairing_hash:
+                config = {'credential': secrets.token_hex(32)}
+        else:
+            if not previous.get('store') or (existing and previous['store']['domain'] != existing['domain']):
+                raise RuntimeError('ENROLLMENT_CONFLICT')
+            if not existing and (previous.get('job') or {}).get('state') == 'complete':
+                raise RuntimeError('LOCAL_INSTALLATION_MISSING_RESET_REQUIRED')
+            # The current installation already owns its slot. A new token does
+            # not reassign this VPS or overwrite local data.
+            config['passwordFromWizard'] = bool(previous['store'].get('vps_ipv4'))
+            if (previous.get('job') or {}).get('agent_id'):
+                config['installationId'] = previous['job']['agent_id']
+            config['storeOrigin'] = 'https://' + previous['store']['domain']
+            save(config_path, config)
+            print('VPS sudah terhubung. Kembali ke wizard untuk memantau instalasi.')
+            return
+    config['pairingHash'] = pairing_hash
+    save(config_path, config)  # Persist before network for lost-response retries.
     ipv4 = run(['curl', '-4', '--noproxy', '*', '--proto', '=https', '-fsS', '--max-time', '8',
                 'https://api.ipify.org'], timeout=10)
     try:
@@ -321,8 +350,53 @@ def setup():
     if not isinstance(result.get('passwordFromWizard'), bool):
         raise SystemExit('Platform belum mendukung wizard terbaru. Coba lagi setelah platform siap.')
     config['passwordFromWizard'] = result['passwordFromWizard']
+    config['installationId'] = result['agentId']
     save(config_path, config)
     print('VPS terhubung. Kembali ke wizard untuk memantau instalasi.')
+
+
+def report_observation(config):
+    data = {'agentVersion': AGENT_VERSION}
+    try:
+        version = read(Path('/etc/single-store/version.json'))
+        if re.fullmatch(r'\d{1,3}\.\d{1,3}\.\d{1,3}', version.get('version', '')):
+            data['appVersion'] = 'v' + version['version']
+        if re.fullmatch(r'[a-f0-9]{40}', version.get('source_sha', '')):
+            data['sourceSha'] = version['source_sha']
+        data['updater'] = ('available' if Path('/run/single-store-updater').is_dir()
+                           else 'unavailable')
+        updater_config = read(Path('/etc/single-store/updater/config.json'))
+        if re.fullmatch(r'[a-f0-9]{32}', updater_config.get('installation', '')):
+            data['updaterInstallationId'] = updater_config['installation']
+    except (OSError, ValueError, TypeError):
+        pass
+    try:
+        request = urllib.request.Request('http://127.0.0.1:3000/api/v1/ready')
+        # Fixed local endpoint only, with redirects forbidden.
+        class NoRedirect(urllib.request.HTTPRedirectHandler):
+            def redirect_request(self, *_):
+                return None
+        with urllib.request.build_opener(NoRedirect).open(request, timeout=3) as response:
+            result = json.load(response)
+            data['application'] = 'ready' if result.get('data', {}).get('status') == 'ready' else 'unavailable'
+    except (OSError, ValueError):
+        data['application'] = 'unavailable'
+    try:
+        state = Path('/var/lib/single-store/updater/state.sqlite')
+        if state.is_file() and not state.is_symlink():
+            with sqlite3.connect(state.as_uri() + '?mode=ro', uri=True, timeout=1) as db:
+                row = db.execute('SELECT state,updated FROM jobs ORDER BY created DESC LIMIT 1').fetchone()
+                if row:
+                    data['updateState'] = row[0]
+                    data['updateAt'] = datetime.fromtimestamp(row[1], timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+        backups = Path('/var/backups/single-store')
+        manifests = list(backups.glob('*/backup.json'))
+        if manifests:
+            newest = max(path.stat().st_mtime for path in manifests if not path.is_symlink())
+            data['backupAt'] = datetime.fromtimestamp(newest, timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+    except (OSError, ValueError, sqlite3.Error):
+        pass
+    api(config, 'observation', data)
 
 
 def main():
@@ -331,18 +405,31 @@ def main():
     os.umask(0o077)
     parser = argparse.ArgumentParser()
     parser.add_argument('--setup', action='store_true')
+    parser.add_argument('--token-stdin', action='store_true')
     args = parser.parse_args()
     if args.setup:
-        setup()
+        with open('/run/btos-agent-enrollment.lock', 'w') as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            setup(args.token_stdin)
         return
     config = read(BASE / 'config.json')
     next_mail_sync = 0
+    next_observation = 0
     with open('/run/btos-agent.lock', 'w') as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         while True:
             try:
                 payload = api(config, 'job')
                 job = payload.get('job')
+                if payload.get('store') and config.get('storeOrigin') != 'https://' + payload['store']['domain']:
+                    config['storeOrigin'] = 'https://' + payload['store']['domain']
+                    save(BASE / 'config.json', config)
+                if time.monotonic() >= next_observation:
+                    next_observation = time.monotonic() + 60
+                    try:
+                        report_observation(config)
+                    except (OSError, ValueError):
+                        pass  # Older controllers do not have the observation route.
                 if job and job['state'] == 'complete' and time.monotonic() >= next_mail_sync:
                     next_mail_sync = time.monotonic() + 120
                     sys.path.insert(0, '/opt/single-store/manager')
@@ -365,7 +452,7 @@ def main():
                         install(config, job, payload['store'], report)
                     except Exception:
                         try:
-                            report.event('preflight', 'failed', {'error_code': 'LOCAL_OPERATION_FAILED'})
+                            report.event(report.state.get('stage', job['stage']), 'failed', {'error_code': 'LOCAL_OPERATION_FAILED'})
                         except Exception:
                             pass  # durable outbox replays on reconnect
                         print('Instalasi tertunda. Periksa journal dan log installer root-only.', flush=True)

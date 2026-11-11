@@ -207,12 +207,8 @@ df -h /var</code></pre>
         <ol>
           <li>Klik Salin perintah, lalu jalankan di terminal VPS.</li>
           <li>
-            Bootstrap memastikan server tidak berisi toko lain, mengunduh agent
-            dengan checksum, lalu meminta token.
-          </li>
-          <li>
-            Klik Salin token dan tempel ketika terminal meminta token. Input
-            disembunyikan.
+            Tempel seluruh blok sekali. Bootstrap memeriksa instalasi yang ada,
+            mengunduh agent dengan checksum, dan menghubungkannya ke wizard.
           </li>
           <li>
             Sesudah pairing berhasil, agent berjalan sebagai service. Kembali ke
@@ -220,8 +216,9 @@ df -h /var</code></pre>
           </li>
         </ol>
         <p>
-          Jangan memasukkan token ke chat, URL, atau perintah shell. Platform
-          tidak meminta password SSH atau private key. Agent mengambil pekerjaan
+          Perlakukan blok perintah sebagai data pribadi. Token di dalamnya
+          kedaluwarsa dalam 15 menit dan hanya dapat dipakai oleh satu instalasi.
+          Agent mengambil pekerjaan
           yang dikenal melalui koneksi HTTPS keluar.
         </p>
       </section>
