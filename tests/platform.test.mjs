@@ -1,10 +1,11 @@
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { randomBytes, createHash, createHmac } from "node:crypto";
+import { randomBytes, createHash, createHmac, randomUUID } from "node:crypto";
 import pg from "pg";
 import { createApp, CONSENT } from "../server/app.mjs";
 import { config } from "../server/config.mjs";
+import { session } from "./operations-fixture.mjs";
 const pool = new pg.Pool({ connectionString: process.env.TEST_DATABASE_URL });
 const sent = new Map();
 const setup = {
@@ -55,6 +56,138 @@ before(async () => {
 after(async () => {
   if (app) await new Promise((r) => app.close(r));
   await pool.end();
+});
+test("operations role, concurrent one-paste enrollment, audited reset, and replacement fencing", async () => {
+  const owner = await session(pool, "ops-owner@example.com");
+  const support = await session(pool, "ops-support@example.com", "support");
+  const stale = await session(pool, "ops-stale@example.com", "super_admin", false);
+  const admin = await session(pool, "ops-admin@example.com", "super_admin");
+  const as = user => ({ Cookie: user.cookie });
+  assert.equal((await req("/ops/tenants")).status, 401);
+  assert.equal((await req("/ops/tenants", null, as(owner))).status, 403);
+  dnsStatus = "ready";
+  const info = { name: "Tenant Operasi", domain: "ops.example.com", adminEmail: "ops-owner@example.com", ...setup };
+  const { store } = (await req("/store", { ...info, domain: "OPS.EXAMPLE.COM." }, as(owner))).body;
+  assert.equal(store.domain, info.domain);
+  assert.equal((await req("/store/dns", { domain: "tökö.example", vpsIpv4: setup.vpsIpv4 }, as(owner))).status, 200);
+  assert.equal((await req("/store/dns", { domain: "https://ops.example.com", vpsIpv4: setup.vpsIpv4 }, as(owner))).status, 422);
+  const releaseIp = { action: "release-ip", storeId: store.id, requestId: randomUUID(),
+    reason: "Melepas konfigurasi IP uji", confirm: store.id };
+  assert.equal((await req("/ops/action", releaseIp, as(support))).status, 403);
+  assert.equal((await req("/ops/action", releaseIp, as(admin))).status, 200);
+  assert.equal((await req("/store", null, as(owner))).body.store.vps_ipv4, null);
+  assert.equal((await req("/store", info, as(owner))).body.store.id, store.id);
+  const issued = await req("/pairing", { installer: "stdin" }, as(owner));
+  assert.equal(issued.status, 200);
+  assert.equal(issued.body.token, undefined);
+  const token = /\n([a-f0-9]{64})\nBTOS_ENROLLMENT/.exec(issued.body.command)?.[1];
+  assert.ok(token);
+  assert.ok(!issued.body.command.includes("/bootstrap.sh?" + token));
+  const clients = Array.from({ length: 2 }, () => ({
+    token, credential: randomBytes(32).toString("hex"), protocol: 2, ipv4: setup.vpsIpv4,
+  }));
+  const results = await Promise.all(clients.map(client => req("/agent/pair", client)));
+  assert.deepEqual(results.map(result => result.status).sort(), [200, 409]);
+  const win = results.findIndex(result => result.status === 200);
+  const installationId = results[win].body.agentId;
+  const auth = { Authorization: "Bearer " + clients[win].credential };
+  await pool.query("UPDATE pairings SET expires_at=now()-interval '1 second' WHERE agent_id=$1", [installationId]);
+  assert.equal((await req("/agent/pair", clients[win])).body.agentId, installationId);
+  assert.equal((await req("/agent/observation", { agentVersion: "1.1.0", appVersion: "v1.0.0" }, auth)).status, 200);
+  assert.equal((await req("/agent/observation", { command: "ignored" }, auth)).status, 422);
+  const listed = await req("/ops/tenants?q=ops.example.com&heartbeat=recent", null, as(support));
+  assert.equal(listed.body.total, 1);
+  assert.equal(listed.body.rows[0].installation_id, installationId);
+  assert.equal(JSON.stringify(listed.body).includes(clients[win].credential), false);
+  const request = await req("/ops/request", { action: "reinstall", reason: "Pengujian lokal" }, as(owner));
+  assert.equal(request.status, 201);
+  assert.equal((await req("/ops/my-requests", null, as(support))).body.requests.length, 0);
+  const action = { storeId: store.id, requestId: randomUUID(), installationId,
+    action: "reset", reason: "Reset lokal terverifikasi", confirm: store.id };
+  assert.equal((await req("/ops/action", action, as(support))).status, 403);
+  assert.equal((await req("/ops/action", action, as(stale))).status, 403);
+  assert.equal((await req("/ops/action", action, { ...as(admin), Origin: "https://other.example" })).status, 403);
+  assert.equal((await req("/ops/action", action, as(admin))).status, 200);
+  assert.equal((await req("/ops/action", action, as(admin))).body.replay, true);
+  assert.equal((await req("/agent/job", null, auth)).status, 401);
+  assert.equal((await req("/agent/pair", clients[win])).status, 410);
+  const details = (await req("/ops/tenant?id=" + store.id, null, as(admin))).body;
+  assert.equal(details.audit.filter(event => event.action === "reset").length, 1);
+  assert.equal(details.installations.length, 1);
+  assert.equal(details.store.domain, info.domain);
+  assert.equal(details.store.installation_generation, 2);
+  assert.equal((await pool.query("SELECT count(*)::int AS n FROM agents WHERE store_id=$1", [store.id])).rows[0].n, 0);
+  assert.equal((await pool.query("SELECT count(*)::int AS n FROM installation_history WHERE store_id=$1", [store.id])).rows[0].n, 1);
+  assert.equal((await req("/store", info, as(owner))).body.store.id, store.id);
+  const replacement = await req("/pairing", {}, as(owner));
+  const fresh = await req("/agent/pair", {
+    ...clients[win], token: replacement.body.token, credential: randomBytes(32).toString("hex"),
+  });
+  assert.equal(fresh.status, 200);
+  assert.notEqual(fresh.body.agentId, installationId);
+  assert.equal((await pool.query("SELECT generation FROM agents WHERE id=$1", [fresh.body.agentId])).rows[0].generation, 2);
+});
+test("sender synchronization is scoped, revision fenced, repeatable and rejects revoked agents", async () => {
+  const owner = await session(pool, "sync-owner@example.com");
+  dnsStatus = "ready";
+  await req("/store", { name: "Nama Awal", domain: "sync.example.com", adminEmail: "sync-owner@example.com", ...setup },
+    { Cookie: owner.cookie });
+  const pairing = await req("/pairing", {}, { Cookie: owner.cookie });
+  const credential = randomBytes(32).toString("hex");
+  const paired = await req("/agent/pair", { token: pairing.body.token, credential, protocol: 2, ipv4: setup.vpsIpv4 });
+  const oldEnabled = cfg.mailEnabled;
+  cfg.mailEnabled = true;
+  cfg.mailControlSecret = "c".repeat(64);
+  try {
+    const provision = await req("/agent/mail", {}, { Authorization: "Bearer " + credential });
+    const tokenHash = createHash("sha256").update(provision.body.token).digest("hex");
+    const headers = { Authorization: "Bearer " + cfg.mailControlSecret };
+    const body = { tokenHash, origin: "https://sync.example.com", name: "Hubify", revision: 4 };
+    assert.equal((await req("/internal/mail-identity", body)).status, 401);
+    assert.equal((await req("/internal/mail-identity", { ...body, origin: "https://other.example" }, headers)).status, 401);
+    const synced = await Promise.all([req("/internal/mail-identity", body, headers), req("/internal/mail-identity", body, headers)]);
+    assert.deepEqual(synced.map(result => result.status), [200, 200]);
+    assert.equal((await req("/internal/mail-identity", { ...body, revision: 3 }, headers)).status, 409);
+    assert.equal((await req("/internal/mail-identity", { ...body, name: "Lama" }, headers)).status, 409);
+    assert.equal((await req("/internal/mail-identity", { ...body, name: "Nama Baru", revision: 5 }, headers)).status, 200);
+    assert.equal((await req("/internal/mail-identity", { ...body, name: "injected\r\nFrom:test", revision: 6 }, headers)).status, 422);
+    const registry = await req("/internal/mail-registry", { tokenHash }, headers);
+    assert.equal(registry.body.brand, "Nama Baru");
+    assert.equal(registry.body.brandSync, true);
+    const details = await req("/store", null, { Cookie: owner.cookie });
+    assert.equal(details.body.store.name, "Nama Baru");
+    assert.equal((await pool.query("SELECT count(*)::int AS n FROM mail_audit WHERE store_id=$1 AND event='brand-synced'",
+      [details.body.store.id])).rows[0].n, 2);
+    await pool.query("UPDATE agents SET revoked_at=now() WHERE id=$1", [paired.body.agentId]);
+    assert.equal((await req("/internal/mail-identity", { ...body, revision: 6 }, headers)).status, 401);
+  } finally { cfg.mailEnabled = oldEnabled; }
+});
+test("WhatsApp observations and pause remain scoped to the selected tenant", async () => {
+  const db = await pool.connect();
+  try {
+    await db.query("CREATE SCHEMA IF NOT EXISTS whatsapp_pilot");
+    await db.query("SET search_path=whatsapp_pilot,public");
+    await db.query(readFileSync(new URL("../server/whatsapp/schema.sql", import.meta.url), "utf8"));
+    await db.query("SET search_path=public");
+    await db.query(readFileSync(new URL("../server/schema.sql", import.meta.url), "utf8"));
+  } finally { db.release(); }
+  const admin = await session(pool, "wa-ops@example.com", "operator");
+  const { rows: stores } = await pool.query("SELECT id FROM stores ORDER BY created_at LIMIT 2");
+  for (const store of stores) {
+    await pool.query(`INSERT INTO whatsapp_pilot.wa_tenants(id,origin,brand,token_digest,paused)
+      VALUES($1,$2,'Demo',$3,false)`, [store.id, "https://" + store.id + ".example.test", store.id]);
+    await pool.query(`INSERT INTO whatsapp_pilot.wa_sessions(provider_id,tenant_id,purpose,expected_phone,connected_phone,state)
+      VALUES($1,$2,'seller',$3,$3,'ready')`, [randomUUID(), store.id, "+6281" + store.id.replace(/\D/g, "").slice(0, 8)]);
+  }
+  const before = (await req("/ops/tenant?id=" + stores[0].id, null, { Cookie: admin.cookie })).body;
+  assert.equal(before.whatsapp.session.state, "ready");
+  assert.equal(JSON.stringify(before.whatsapp).includes("+6281"), false);
+  assert.equal((await req("/ops/action", {
+    action: "pause-wa", storeId: stores[0].id, requestId: randomUUID(), reason: "Menahan pengiriman uji lokal",
+  }, { Cookie: admin.cookie })).status, 200);
+  const { rows } = await pool.query("SELECT id,paused FROM whatsapp_pilot.wa_tenants ORDER BY id");
+  assert.equal(rows.find(row => row.id === stores[0].id).paused, true);
+  assert.equal(rows.find(row => row.id === stores[1].id).paused, false);
 });
 async function req(route, data, headers = {}) {
   const r = await fetch(base + route, {

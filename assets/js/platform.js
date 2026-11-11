@@ -56,6 +56,27 @@
   function bind(id, fn) {
     $(id).addEventListener("click", () => action(fn));
   }
+  $("service-request-form").addEventListener("submit", event => {
+    event.preventDefault();
+    action(async () => {
+      await api("/ops/request", { action: $("request-type").value, reason: $("request-reason").value });
+      $("request-reason").value = "";
+      message("Permintaan tercatat. Operator akan meninjaunya.");
+      await refreshRequests();
+    });
+  });
+  async function refreshRequests() {
+    $("service-requests").hidden = !authenticated || !current?.store;
+    if ($("service-requests").hidden) return;
+    const result = await api("/ops/my-requests");
+    const states = { requested: "Menunggu tinjauan", reviewed: "Ditinjau operator", rejected: "Ditolak" };
+    $("request-history").replaceChildren(...result.requests.map(request => {
+      const item = document.createElement("li");
+      const option = [...$("request-type").options].find(option => option.value === request.action);
+      item.textContent = (option?.textContent || request.action) + " · " + states[request.state];
+      return item;
+    }));
+  }
   let mailIdentity = null;
   for (const actionName of ['identity', 'administrators', 'rotate', 'disable', 'enable']) bind('mail-' + actionName, async () => {
     if (!mailIdentity || !current?.store) return;
@@ -124,7 +145,6 @@
       });
       $("admin-password").value = "";
       $("admin-password-confirmation").value = "";
-      $("pair-token").value = "";
       $("command").value = "";
       $("pairing").hidden = true;
       editing = false;
@@ -136,17 +156,15 @@
     panel(2);
   });
   bind("pair", async () => {
-    const r = await api("/pairing", {});
+    const r = await api("/pairing", { installer: "stdin" });
     $("command").value = r.command;
-    $("pair-token").value = r.token;
     $("pairing").hidden = false;
     message(
-      "Token aktif selama 15 menit. Jalankan perintah di VPS Anda.",
+      "Tempel seluruh blok sekali di VPS Anda. Perintah berlaku 15 menit.",
     );
   });
   for (const [id, input] of [
     ["copy-command", "command"],
-    ["copy-token", "pair-token"],
   ])
     bind(id, async () => {
       try {
@@ -175,6 +193,9 @@
   bind("logout", async () => {
     await api("/logout", {});
     authenticated = false;
+    $("service-requests").hidden = true;
+    $("command").value = "";
+    $("request-history").replaceChildren();
     current = null;
     location.reload();
   });
@@ -214,6 +235,7 @@
     if (!authenticated) return;
     const r = await api("/store");
     current = r;
+    await refreshRequests();
     if (!r.store || (!r.agent && !r.store.vps_ipv4)) {
       panel(2);
       return;
@@ -222,7 +244,7 @@
       if (!editing) panel(3);
       return;
     }
-    $("pair-token").value = "";
+    $("command").value = "";
     $("pairing").hidden = true;
     message("");
     const j = r.job;
