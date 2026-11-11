@@ -42,6 +42,8 @@ before(async () => {
     releases: [release],
     sellerPilotOnly: false,
     installerTestEmails: ["pilot@example.com"],
+    onePasteEmails: ["ops-owner@example.com"],
+    brandSyncStoreIds: [],
   };
   app = createApp({
     pool,
@@ -141,8 +143,14 @@ test("sender synchronization is scoped, revision fenced, repeatable and rejects 
   try {
     const provision = await req("/agent/mail", {}, { Authorization: "Bearer " + credential });
     const tokenHash = createHash("sha256").update(provision.body.token).digest("hex");
+    const storeId = (await req("/store", null, { Cookie: owner.cookie })).body.store.id;
+    cfg.brandSyncStoreIds = [storeId];
     const headers = { Authorization: "Bearer " + cfg.mailControlSecret };
     const body = { tokenHash, origin: "https://sync.example.com", name: "Hubify", revision: 4 };
+    cfg.brandSyncStoreIds = [];
+    assert.equal((await req("/internal/mail-registry", { tokenHash }, headers)).body.brandSync, false);
+    assert.equal((await req("/internal/mail-identity", body, headers)).status, 403);
+    cfg.brandSyncStoreIds = [storeId];
     assert.equal((await req("/internal/mail-identity", body)).status, 401);
     assert.equal((await req("/internal/mail-identity", { ...body, origin: "https://other.example" }, headers)).status, 401);
     const synced = await Promise.all([req("/internal/mail-identity", body, headers), req("/internal/mail-identity", body, headers)]);
@@ -160,7 +168,7 @@ test("sender synchronization is scoped, revision fenced, repeatable and rejects 
       [details.body.store.id])).rows[0].n, 2);
     await pool.query("UPDATE agents SET revoked_at=now() WHERE id=$1", [paired.body.agentId]);
     assert.equal((await req("/internal/mail-identity", { ...body, revision: 6 }, headers)).status, 401);
-  } finally { cfg.mailEnabled = oldEnabled; }
+  } finally { cfg.mailEnabled = oldEnabled; cfg.brandSyncStoreIds = []; }
 });
 test("WhatsApp observations and pause remain scoped to the selected tenant", async () => {
   const db = await pool.connect();

@@ -40,7 +40,7 @@ export async function provisionMail(db, store, secret) {
     token: vault.open(store.id, tenant.token_sealed) };
 }
 
-export async function lookupMailTenant(pool, tokenHash) {
+export async function lookupMailTenant(pool, tokenHash, allowedIds = []) {
   if (!/^[a-f0-9]{64}$/.test(tokenHash || "")) return null;
   const { rows: [row] } = await pool.query(
     `SELECT t.store_id,t.origin,t.brand,t.seller_emails,t.generation FROM mail_tenants t
@@ -48,10 +48,10 @@ export async function lookupMailTenant(pool, tokenHash) {
      WHERE t.token_digest=$1 AND t.enabled AND a.revoked_at IS NULL`, [tokenHash],
   );
   return row ? { tenantId: row.store_id, origin: row.origin, brand: row.brand,
-    sellerEmails: row.seller_emails, tokenHash, generation: row.generation, brandSync: true } : null;
+    sellerEmails: row.seller_emails, tokenHash, generation: row.generation, brandSync: allowedIds.includes(row.store_id) } : null;
 }
 
-export async function syncMailBrand(db, data) {
+export async function syncMailBrand(db, data, allowedIds = []) {
   if (!/^[a-f0-9]{64}$/.test(data.tokenHash || "") ||
       typeof data.name !== "string" || !data.name.trim() || data.name.length > 100 ||
       /[\x00-\x1f\x7f]/.test(data.name) ||
@@ -60,6 +60,7 @@ export async function syncMailBrand(db, data) {
   const { rows: [store] } = await db.query(`SELECT s.id FROM stores s JOIN mail_tenants t ON t.store_id=s.id
     WHERE t.token_digest=$1 AND t.origin=$2 FOR UPDATE OF s`, [data.tokenHash, data.origin]);
   if (!store) return { status: 401 };
+  if (!allowedIds.includes(store.id)) return { status: 403 };
   const { rows: [tenant] } = await db.query(`SELECT t.brand,t.brand_revision,t.generation,s.name FROM mail_tenants t
     JOIN stores s ON s.id=t.store_id JOIN agents a ON a.store_id=s.id AND a.revoked_at IS NULL
     WHERE t.store_id=$1 AND t.token_digest=$2 AND t.origin=$3 AND t.enabled FOR UPDATE OF t`,

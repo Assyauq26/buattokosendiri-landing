@@ -142,8 +142,8 @@
               Izinkan port 80 dan 443. Database dan wizard lokal tetap tertutup
               dari internet.
             </li>
-            <li>
-              Siapkan instalasi, lalu tempel seluruh perintah sekali di terminal VPS.
+            <li id="pair-instruction">
+              Siapkan instalasi, jalankan perintah di VPS, lalu tempel token saat diminta.
             </li>
           </ol>
           <button class="button primary" id="pair">
@@ -159,6 +159,12 @@
             ></textarea
             ><button class="button secondary" id="copy-command">
               Salin perintah</button>
+            <div id="legacy-pairing" hidden>
+              <label for="pair-token">Token pairing pribadi</label>
+              <input id="pair-token" type="password" readonly autocomplete="off">
+              <button class="button secondary" id="copy-token" type="button">Salin token</button>
+              <p>Tempel token saat terminal memintanya.</p>
+            </div>
             <p class="hint">
               Perintah ini pribadi dan berlaku 15 menit. Jika terminal meminta password sudo, masukkan password VPS Anda.
             </p>

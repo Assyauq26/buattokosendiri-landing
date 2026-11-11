@@ -175,3 +175,5 @@ baru melalui agent sah. Database restore memerlukan penilaian transaksi baru ter
 Keseluruhan brief masih berstatus NOT READY untuk rilis penuh karena executor lifecycle,
 kontrol operator WA lengkap, pilot email nyata baru dan fresh-VPS end-to-end belum selesai.
 Kandidat ini dapat ditinjau dan diuji untuk milestone yang tersedia.
+
+Pilot terbatas: MAIL_BRAND_SYNC_STORE_IDS membatasi kapabilitas registry dan sinkronisasi nama ke tenant yang ditentukan operator. SINGLE_PASTE_SELLER_EMAILS membatasi wizard satu-paste; akun lainnya mempertahankan token/perintah legacy. Default kedua scope kosong. Aktivasi tidak membuka fleet otomatis.

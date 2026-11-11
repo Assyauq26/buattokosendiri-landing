@@ -6,6 +6,7 @@
     current = null,
     busy = false,
     editing = false;
+  let onePaste = false;
   function message(text, error = false) {
     const el = $(error ? "error" : "notice");
     el.textContent = text;
@@ -156,15 +157,18 @@
     panel(2);
   });
   bind("pair", async () => {
-    const r = await api("/pairing", { installer: "stdin" });
+    const r = await api("/pairing", { installer: onePaste ? "stdin" : "legacy" });
     $("command").value = r.command;
+    $("legacy-pairing").hidden = onePaste;
+    $("pair-token").value = r.token || "";
     $("pairing").hidden = false;
     message(
-      "Tempel seluruh blok sekali di VPS Anda. Perintah berlaku 15 menit.",
+      r.instruction,
     );
   });
   for (const [id, input] of [
     ["copy-command", "command"],
+    ["copy-token", "pair-token"],
   ])
     bind(id, async () => {
       try {
@@ -195,6 +199,7 @@
     authenticated = false;
     $("service-requests").hidden = true;
     $("command").value = "";
+    $("pair-token").value = "";
     $("request-history").replaceChildren();
     current = null;
     location.reload();
@@ -292,10 +297,14 @@
   }
   async function restore() {
     try {
-      const { seller } = await api("/session");
+      const { seller, onePaste: enabled } = await api("/session");
       authenticated = true;
       $("signed-in").textContent = seller.email;
       $("logout").hidden = false;
+      onePaste = Boolean(enabled);
+      $("pair-instruction").textContent = onePaste
+        ? "Siapkan instalasi, lalu tempel seluruh perintah sekali di terminal VPS."
+        : "Siapkan instalasi, jalankan perintah di VPS, lalu tempel token saat diminta.";
       $("admin-email").value = seller.email;
       const r = await api("/store");
       if (r.store) {

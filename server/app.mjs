@@ -184,14 +184,14 @@ export function createApp({ pool, config, sendMail, checkDns = checkStoreDns }) 
         reject(401, "Otorisasi tidak valid.");
       if (typeof data.tokenHash === "string" && /^[a-f0-9]{64}$/.test(data.tokenHash))
         await rate("mail-identity:" + data.tokenHash, 60, 3600);
-      const { status, brand } = await tx(db => syncMailBrand(db, data));
+      const { status, brand } = await tx(db => syncMailBrand(db, data, config.brandSyncStoreIds));
       return reply(status, brand ? { brand } : { error: "Identitas belum disinkronkan." });
     }
     // Operator-only control plane; the public proxy must also block /internal/*.
     if (route === "/internal/mail-registry" && req.method === "POST") {
       if (!config.mailEnabled || !controlAuthorized(req.headers.authorization, config.mailControlSecret))
         reject(401, "Otorisasi tidak valid.");
-      const tenant = await lookupMailTenant(pool, data.tokenHash);
+      const tenant = await lookupMailTenant(pool, data.tokenHash, config.brandSyncStoreIds);
       return reply(tenant ? 200 : 404, tenant || { error: "Tenant tidak tersedia." });
     }
     if (route === "/health" && req.method === "GET") {
@@ -549,7 +549,7 @@ export function createApp({ pool, config, sendMail, checkDns = checkStoreDns }) 
       return reply(200, result);
     }
     if (route === "/session" && req.method === "GET")
-      return reply(200, { seller: user, consent: CONSENT });
+      return reply(200, { seller: user, consent: CONSENT, onePaste: (config.onePasteEmails || []).includes(user.email) });
     if (route === "/logout" && req.method === "POST") {
       const raw =
         (req.headers.cookie || "")
@@ -684,7 +684,7 @@ export function createApp({ pool, config, sendMail, checkDns = checkStoreDns }) 
           [digest(raw), store.id],
         );
       });
-      if (data.installer !== "stdin") return reply(200, {
+      if (data.installer !== "stdin" || !(config.onePasteEmails || []).includes(user.email)) return reply(200, {
         token: raw,
         expiresIn: 900,
         command: `(bootstrap=$(mktemp) && trap 'rm -f -- "$bootstrap"' EXIT && curl --proto '=https' --tlsv1.2 -fsS ${config.origin}/bootstrap.sh -o "$bootstrap" && sudo bash "$bootstrap")`,
