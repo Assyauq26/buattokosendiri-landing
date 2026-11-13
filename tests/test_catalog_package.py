@@ -25,6 +25,7 @@ class PackageTests(unittest.TestCase):
     def package(self, change=None, extra=None):
         files = {name: b'fixture' for name in catalog.REQUIRED}
         files['VERSION'] = b'1.7.2\n'
+        files['installer/update_service/__init__.py'] = b'VERSION = 2\n'
         files['deploy/updater-trust.json'] = json.dumps(self.trust).encode()
         policy = {'db_contract': 1, 'postgres_major': 16, 'rollback_compatible': True,
                   'minimum_installed_contract': 1, 'maximum_installed_contract': 1,
@@ -60,6 +61,22 @@ class PackageTests(unittest.TestCase):
         release['asset']['digest'] = '0' * 64
         with self.assertRaisesRegex(ValueError, 'asset_integrity'):
             catalog.validate_package(path, release)
+
+    def test_new_release_cannot_be_offered_to_older_worker(self):
+        def worker3(files, manifest):
+            name='installer/update_service/__init__.py'
+            files[name]=b'VERSION = 3\n'
+            manifest['files'][name]=hashlib.sha256(files[name]).hexdigest()
+        entry=catalog.validate_package(*self.package(worker3))
+        self.assertEqual(entry['minimumUpdater'],3)
+
+    def test_ambiguous_worker_version_is_rejected(self):
+        def ambiguous(files, manifest):
+            name='installer/update_service/__init__.py'
+            files[name]=b'VERSION = 2\nVERSION = 3\n'
+            manifest['files'][name]=hashlib.sha256(files[name]).hexdigest()
+        with self.assertRaisesRegex(ValueError,'worker_version_invalid'):
+            catalog.validate_package(*self.package(ambiguous))
 
     def test_false_rollback_still_rejected_without_migration_approval(self):
         def forward(files,manifest):

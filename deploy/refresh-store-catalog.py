@@ -22,7 +22,7 @@ CATALOG = Path('/etc/btos-release-catalog')
 REQUIRED = {'VERSION', 'app/Dockerfile', 'deploy/compose.yaml', 'installer/core.py',
             'installer/update_service/new_install.py', 'installer/update_service/bootstrap.py',
             'installer/update_service/server.py', 'deploy/updater-trust.json',
-            'deploy/single-store-updater.service', 'release-policy.json'}
+            'deploy/single-store-updater.service', 'installer/update_service/__init__.py', 'release-policy.json'}
 
 
 def validate_package(path, release, *, migration=False):
@@ -67,9 +67,13 @@ def validate_package(path, release, *, migration=False):
         # Public trust carried by a new installation must match the operator key.
         if json.load(archive.extractfile('deploy/updater-trust.json')) != json.loads((CATALOG / 'trust.json').read_text()):
             raise ValueError('updater_trust_mismatch')
+        worker_source = archive.extractfile('installer/update_service/__init__.py').read().decode()
+        worker = re.findall(r'^VERSION\s*=\s*([2-9][0-9]?)\s*$', worker_source, re.M)
+        if len(worker) != 1:
+            raise ValueError('worker_version_invalid')
         return {**{k: release['asset'][k] for k in ['url', 'digest', 'size']},
                 'version': manifest['version'], 'sha': release['sha'], 'channel': 'stable',
-                'minimumUpdater': 2, 'dbContract': 1, 'rollbackCompatible': rollback,
+                'minimumUpdater': int(worker[0]), 'dbContract': 1, 'rollbackCompatible': rollback,
                 'minimumInstalledVersion': policy['minimum_installed_version'],
                 'maximumInstalledVersion': policy['maximum_installed_version'],
                 'notes': 'Rilis stabil resmi. Instalasi baru menyertakan Update Versi satu tombol; upgrade mengikuti kompatibilitas paket.'}
