@@ -29,6 +29,66 @@ WORK = Path('/opt/btos-agent')
 REPOSITORY = 'Assyauq26/buattokoonline'
 ORIGIN = 'https://buattokosendiri.web.id'
 AGENT_VERSION = '1.1.0'
+WORKER_V3_SHA = '1239bec7b8c769810841a4aeb8f719e4770db8fa'
+APP_V180_SHA = '7e81f8e60b27ab5695ac50ac6b653b63095e36d1'
+APP_V180_DIGEST = '2e15208d27a87a4aeae4446404d45a1f91b55fcc5d28da3714dc064aeeaa9223'
+
+
+def install_v180_worker(release):
+    """Empty-server entry with separately immutable app and worker sources.
+
+    The hook verifies the complete archive before invoking the old installer.
+    Retry after wizard preparation does not rerun bootstrap or replace a worker.
+    """
+    if release['sha'] != APP_V180_SHA or release.get('asset', {}).get('digest') != APP_V180_DIGEST:
+        raise RuntimeError('UNREVIEWED_WORKER_PAIRING')
+    worker = WORK / ('worker-' + WORKER_V3_SHA)
+    if not worker.exists():
+        worker.mkdir(mode=0o700)
+        run(['git','init','-q',str(worker)])
+    run(['git','-C',str(worker),'fetch','--depth=1','https://github.com/'+REPOSITORY+'.git',WORKER_V3_SHA,'refs/tags/v1.8.0'])
+    run(['git','-C',str(worker),'checkout','--detach',WORKER_V3_SHA])
+    if run(['git','-C',str(worker),'rev-parse','HEAD']) != WORKER_V3_SHA:
+        raise RuntimeError('WORKER_SOURCE_MISMATCH')
+    setup = Path('/etc/single-store/setup.json')
+    if setup.exists():
+        plan = read(Path('/etc/single-store-worker-bootstrap/plan.json'))
+        if plan['sha'] != WORKER_V3_SHA or read(setup).get('source_sha') != APP_V180_SHA:
+            raise RuntimeError('WORKER_RETRY_REQUIRES_OPERATOR')
+        return
+    archive = WORK / 'store-v1.8.0.tar.gz'
+    class AssetRedirect(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self, req, fp, code, msg, headers, newurl):
+            from urllib.parse import urlparse
+            u = urlparse(newurl)
+            if u.scheme != 'https' or u.hostname not in {'github.com','release-assets.githubusercontent.com','objects.githubusercontent.com'} or u.username or u.password or u.port:
+                raise RuntimeError('ASSET_REDIRECT_REJECTED')
+            return super().redirect_request(req,fp,code,msg,headers,newurl)
+    url='https://github.com/'+REPOSITORY+'/releases/download/v1.8.0/store-v1.8.0.tar.gz'
+    with urllib.request.build_opener(AssetRedirect()).open(url,timeout=60) as response, archive.open('wb') as out:
+        total=0
+        while chunk := response.read(1024*1024):
+            total+=len(chunk)
+            if total>4398817: raise RuntimeError('ASSET_SIZE_MISMATCH')
+            out.write(chunk)
+    if total!=4398817 or hashlib.sha256(archive.read_bytes()).hexdigest()!=APP_V180_DIGEST:
+        raise RuntimeError('ASSET_DIGEST_MISMATCH')
+    code="import sys;sys.path.insert(0,sys.argv[1]+'/installer');from update_service.fresh_worker_hook import start_wizard;start_wizard(sys.argv[1],sys.argv[2],sys.argv[3])"
+    run(['/usr/bin/python3','-c',code,str(worker),WORKER_V3_SHA,str(archive)],timeout=1200)
+
+
+def finish_v180_worker():
+    # systemd serializes with a timer invocation already in flight.
+    run(['systemctl','start','single-store-worker-v3-bootstrap.service'],timeout=180)
+    receipt=read(Path('/etc/single-store/updater/worker-upgrade.json'))
+    if receipt.get('phase')!='complete' or receipt.get('sourceSha')!=WORKER_V3_SHA:
+        raise RuntimeError('WORKER_PROVISIONING_INCOMPLETE')
+    verify_v180_worker()
+
+
+def verify_v180_worker():
+    code="import sys,json,hashlib;from pathlib import Path;r=json.loads(Path('/etc/single-store/updater/worker-upgrade.json').read_text());assert r['phase']=='complete' and r['sourceSha']==sys.argv[1];root=Path('/opt/single-store/updater');actual={p.relative_to(root).as_posix():hashlib.sha256(p.read_bytes()).hexdigest() for p in root.rglob('*.py') if not p.is_symlink()};assert actual==r['afterFiles'];sys.path.insert(0,str(root));from update_service.worker_upgrade import health;health()"
+    run(['/usr/bin/python3','-c',code,WORKER_V3_SHA],timeout=180)
 
 
 def save(path, data):
@@ -186,6 +246,9 @@ def reconnect_store(config, state, store, report):
     version = read(Path('/etc/single-store/version.json'))
     if not re.fullmatch(r'[a-f0-9]{40}', version.get('source_sha', '')) or not re.fullmatch(r'\d+\.\d+\.\d+', version.get('version', '')):
         raise RuntimeError('INSTALLATION_IDENTITY_MISMATCH')
+    if version['version']=='1.8.0':
+        if Path('/etc/single-store-worker-bootstrap/plan.json').exists():finish_v180_worker()
+        else:verify_v180_worker()
     report.event('health')
     core.healthy(False)
     core.public_health(state)
@@ -218,7 +281,10 @@ def install(config, job, store, report):
     if (source / 'VERSION').read_text().strip() != release['version'][1:]:
         raise RuntimeError('RELEASE_VERSION_MISMATCH')
     report.event('runtime')
-    run(['bash', str(source / 'install.sh')], timeout=1200)
+    if release['version']=='v1.8.0':
+        install_v180_worker(release)
+    else:
+        run(['bash', str(source / 'install.sh')], timeout=1200)
     # The local recovery wizard is stopped while the agent owns the installer lock.
     run(['systemctl', 'stop', 'single-store-setup.service'])
     sys.path.insert(0, '/opt/single-store/manager')
@@ -285,6 +351,7 @@ def install(config, job, store, report):
             core.dc = original_dc
         del password
     run(['systemctl', 'disable', '--now', 'single-store-setup.service'])
+    if release['version']=='v1.8.0': finish_v180_worker()
     sync_mail(config, store, core)
     report.event('complete', 'complete', {'https': 'PUBLIC_CERTIFICATE_VALID', 'application': 'healthy',
         'version': release['version'], 'source_sha': release['sha']})

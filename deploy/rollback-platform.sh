@@ -11,7 +11,13 @@ source_dir=$(cat "$backup/previous-source")
 export PLATFORM_SHA="$sha"
 exec 9>/run/btos-platform-deploy.lock
 flock -n 9 || exit 1
-docker compose -f "$source_dir/deploy/compose.yaml" up -d --no-build --wait app
+overlay=()
+if [[ -f /etc/btos-platform/catalog-compose.json ]]; then
+  [[ ! -L /etc/btos-platform/catalog-compose.json && $(stat -c %u /etc/btos-platform/catalog-compose.json) == 0 ]] || exit 1
+  [[ $(( 8#$(stat -c %a /etc/btos-platform/catalog-compose.json) & 8#022 )) == 0 ]] || exit 1
+  overlay=(-f /etc/btos-platform/catalog-compose.json)
+fi
+docker compose -f "$source_dir/deploy/compose.yaml" "${overlay[@]}" up -d --no-build --wait app
 curl --fail --silent http://127.0.0.1:8088/api/platform/health
 printf '%s\n' "$sha" >/etc/btos-platform/deployed-sha
 ln -sfn "$source_dir" /opt/btos-platform/current

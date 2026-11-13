@@ -61,6 +61,22 @@ class PackageTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'asset_integrity'):
             catalog.validate_package(path, release)
 
+    def test_false_rollback_still_rejected_without_migration_approval(self):
+        def forward(files,manifest):
+            manifest['compatibility']['rollback_compatible']=False
+            files['release-policy.json']=json.dumps(manifest['compatibility']).encode()
+            manifest['files']['release-policy.json']=hashlib.sha256(files['release-policy.json']).hexdigest()
+        package=self.package(forward)
+        with self.assertRaisesRegex(ValueError,'contract_incompatible'):
+            catalog.validate_package(*package)
+        entry=catalog.validate_package(*package,migration=True)
+        self.assertIs(entry['rollbackCompatible'],False)
+
+    def test_migration_mode_never_skips_integrity(self):
+        path,release=self.package();release['asset']['digest']='0'*64
+        with self.assertRaisesRegex(ValueError,'asset_integrity'):
+            catalog.validate_package(path,release,migration=True)
+
     def test_rejects_wrong_commit(self):
         with self.assertRaisesRegex(ValueError, 'manifest_identity'):
             catalog.validate_package(*self.package(lambda f, m: m.update(source_sha='b' * 40)))

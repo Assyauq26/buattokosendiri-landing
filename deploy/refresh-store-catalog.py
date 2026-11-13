@@ -25,7 +25,7 @@ REQUIRED = {'VERSION', 'app/Dockerfile', 'deploy/compose.yaml', 'installer/core.
             'deploy/single-store-updater.service', 'release-policy.json'}
 
 
-def validate_package(path, release):
+def validate_package(path, release, *, migration=False):
     """Validate without extracting or executing any code from the archive."""
     if path.stat().st_size != release['asset']['size'] or hashlib.sha256(path.read_bytes()).hexdigest() != release['asset']['digest']:
         raise ValueError('asset_integrity')
@@ -55,7 +55,8 @@ def validate_package(path, release):
         policy = manifest['compatibility']
         if policy != json.load(archive.extractfile('release-policy.json')):
             raise ValueError('policy_integrity')
-        if (policy.get('db_contract') != 1 or policy.get('postgres_major') != 16 or policy.get('rollback_compatible') is not True
+        rollback = policy.get('rollback_compatible')
+        if (policy.get('db_contract') != 1 or policy.get('postgres_major') != 16 or (rollback is not True and not (migration and rollback is False))
                 or not policy.get('minimum_installed_contract', 999) <= 1 <= policy.get('maximum_installed_contract', -1)):
             raise ValueError('contract_incompatible')
         for key in ['minimum_installed_version', 'maximum_installed_version']:
@@ -68,7 +69,7 @@ def validate_package(path, release):
             raise ValueError('updater_trust_mismatch')
         return {**{k: release['asset'][k] for k in ['url', 'digest', 'size']},
                 'version': manifest['version'], 'sha': release['sha'], 'channel': 'stable',
-                'minimumUpdater': 2, 'dbContract': 1, 'rollbackCompatible': True,
+                'minimumUpdater': 2, 'dbContract': 1, 'rollbackCompatible': rollback,
                 'minimumInstalledVersion': policy['minimum_installed_version'],
                 'maximumInstalledVersion': policy['maximum_installed_version'],
                 'notes': 'Rilis stabil resmi. Instalasi baru menyertakan Update Versi satu tombol; upgrade mengikuti kompatibilitas paket.'}
@@ -125,7 +126,19 @@ def main():
                     if count > release['asset']['size']:
                         raise ValueError('asset_limit')
                     out.write(chunk)
-            entry = validate_package(package, release)
+            now = int(time.time())
+            expiry = now + 2 * 86400
+            try:
+                entry = validate_package(package, release)
+            except ValueError as error:
+                if str(error) != 'contract_incompatible': raise
+                # This only verifies archive bytes/trust. A separate root-owned
+                # approval and authenticated canonical policy must authorize it.
+                validate_package(package, release, migration=True)
+                import importlib.util
+                spec = importlib.util.spec_from_file_location('migration_publication', source/'deploy/migration-publication.py')
+                module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
+                entry, expiry = module.migration_entry(package, release, old, CATALOG, source, image, container, run, now)
         prior = next((r for r in old['releases'] if r['version'] == entry['version']), None)
         if prior and (prior['sha'] != entry['sha'] or prior['digest'] != entry['digest']):
             raise ValueError('immutable_release_changed')
@@ -133,7 +146,7 @@ def main():
         if prior == entry and old['expiresAt'] > now + 6 * 3600:
             print('STABLE_CATALOG_CURRENT ' + release['version'])
             return
-        payload = {**old, 'sequence': old['sequence'] + 1, 'issuedAt': now, 'expiresAt': now + 2 * 86400,
+        payload = {**old, 'sequence': old['sequence'] + 1, 'issuedAt': now, 'expiresAt': expiry,
                    'releases': [r for r in old['releases'] if r['version'] != entry['version']] + [entry]}
         backup = CATALOG / ('catalog.sequence-' + str(old['sequence']) + '.json')
         if not backup.exists():
