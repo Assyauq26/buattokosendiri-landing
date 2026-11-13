@@ -12,6 +12,7 @@ COPY --chown=node:node persiapan-toko ./persiapan-toko
 COPY --chown=node:node kebijakan-privasi ./kebijakan-privasi
 COPY --chown=node:node daftar ./daftar
 COPY --chown=node:node masuk ./masuk
+COPY --chown=node:node admin ./admin
 COPY --chown=node:node index.html 404.html portal-config.json ./
 USER node
 EXPOSE 8080

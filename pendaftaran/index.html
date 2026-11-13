@@ -142,39 +142,26 @@
               Izinkan port 80 dan 443. Database dan wizard lokal tetap tertutup
               dari internet.
             </li>
-            <li>
-              Buat token pairing, salin perintah, lalu jalankan di terminal VPS.
-            </li>
-            <li>
-              Tempel token saat terminal memintanya. Token berlaku 15 menit dan
-              hanya untuk toko ini.
+            <li id="pair-instruction">
+              Siapkan instalasi, lalu tempel seluruh perintah sekali di terminal VPS.
             </li>
           </ol>
           <button class="button primary" id="pair">
-            Buat perintah pairing
+            Siapkan instalasi
           </button>
           <div id="pairing" hidden>
+            <p id="installer-version" class="hint" role="status"></p>
             <label for="command">Perintah bootstrap</label
             ><textarea
               id="command"
               readonly
-              rows="4"
+              rows="7"
               spellcheck="false"
             ></textarea
             ><button class="button secondary" id="copy-command">
-              Salin perintah</button
-            ><label for="pair-token">Token pairing pribadi</label
-            ><input
-              id="pair-token"
-              type="password"
-              readonly
-              autocomplete="off"
-            /><button class="button secondary" id="copy-token">
-              Salin token
-            </button>
+              Salin perintah</button>
             <p class="hint">
-              Jangan bagikan token atau memasukkannya ke riwayat shell. Tunggu
-              halaman ini mendeteksi agent.
+              Perintah ini pribadi dan berlaku 15 menit. Jika terminal meminta password sudo, masukkan password VPS Anda.
             </p>
           </div>
           <button class="text-button" id="edit-store">

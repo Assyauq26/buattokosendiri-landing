@@ -1,5 +1,7 @@
 import { sellerOtpMessage } from "./seller-otp-mail.mjs";
-import { controlAuthorized, lookupMailTenant, provisionMail, rotateMail, mailBrand, verifyMailReceipt } from "./mail-tenants.mjs";
+import { storeReleases } from "./store-releases.mjs";
+import { createLatestInstallerResolver } from "./latest-installer.mjs";
+import { controlAuthorized, lookupMailTenant, provisionMail, rotateMail, mailBrand, verifyMailReceipt, syncMailBrand } from "./mail-tenants.mjs";
 import { createServer } from "node:http";
 import {
   createHash,
@@ -11,8 +13,9 @@ import {
 } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, domainToASCII } from "node:url";
 import { isIP } from "node:net";
+import { createOperations, agentObservation } from "./operations.mjs";
 import { checkStoreDns, installerPasswordVault, isStoreIpv4, validAdminPassword } from "./store-setup.mjs";
 const ROOT = fileURLToPath(new URL("../", import.meta.url));
 export const STAGES = [
@@ -56,6 +59,9 @@ function email(value) {
   return value.toLowerCase();
 }
 function domain(value) {
+  if (typeof value !== "string" || /[\s/:?#@\\]/.test(value))
+    reject(422, "Isi domain tanpa https, port, atau path.");
+  value = domainToASCII(value.toLowerCase().replace(/\.$/, ""));
   if (
     typeof value !== "string" ||
     value.length > 253 ||
@@ -70,7 +76,7 @@ function domain(value) {
     reject(422, "Gunakan domain toko milik Anda sendiri.");
   return value;
 }
-export function createApp({ pool, config, sendMail, checkDns = checkStoreDns }) {
+export function createApp({ pool, config, sendMail, checkDns = checkStoreDns, resolveInstallerRelease = createLatestInstallerResolver() }) {
   const passwordVault = installerPasswordVault(config.secret);
   const installerTestEmails = config.installerTestEmails || [];
   const canSignIn = (email) => !config.sellerPilotOnly || installerTestEmails.includes(email);
@@ -115,7 +121,7 @@ export function createApp({ pool, config, sendMail, checkDns = checkStoreDns }) 
     const {
       rows: [user],
     } = await pool.query(
-      "SELECT s.id,s.email FROM sellers s JOIN sessions t ON t.seller_id=s.id WHERE t.digest=$1 AND t.expires_at>now()",
+      "SELECT s.id,s.email,t.authenticated_at FROM sellers s JOIN sessions t ON t.seller_id=s.id WHERE t.digest=$1 AND t.expires_at>now()",
       [digest(raw)],
     );
     if (!user) reject(401, "Silakan masuk menggunakan OTP email.");
@@ -130,7 +136,8 @@ export function createApp({ pool, config, sendMail, checkDns = checkStoreDns }) 
       rows: [row],
     } = await pool.query(
       `UPDATE agents a SET last_seen=now() FROM stores s JOIN sellers u ON u.id=s.seller_id
-       WHERE a.digest=$1 AND a.revoked_at IS NULL AND a.store_id=s.id
+       WHERE a.digest=$1 AND a.revoked_at IS NULL AND a.retired_at IS NULL AND a.store_id=s.id
+         AND a.generation=s.installation_generation
          AND (NOT $2::boolean OR u.email=ANY($3::text[])) RETURNING a.*`,
       [digest(raw), Boolean(config.sellerPilotOnly), installerTestEmails],
     );
@@ -167,16 +174,25 @@ export function createApp({ pool, config, sendMail, checkDns = checkStoreDns }) 
     if (!response.ok)
       reject(503, "Email belum dapat dikirim. Coba lagi nanti.");
   }
+  const operations = createOperations({ pool, tx, rate, reject, secret: config.secret, config });
   async function api(req, url, data, reply) {
     const route = url.pathname.replace("/api/platform", "");
     const peer = req.socket.remoteAddress.replace(/^::ffff:/, "");
     const forwarded = req.headers["x-forwarded-for"]?.split(",").at(-1).trim();
     const ip = peer === config.trustedProxyIp && isIP(forwarded || "") ? forwarded : peer;
+    if (route === "/internal/mail-identity" && req.method === "POST") {
+      if (!config.mailEnabled || !controlAuthorized(req.headers.authorization, config.mailControlSecret))
+        reject(401, "Otorisasi tidak valid.");
+      if (typeof data.tokenHash === "string" && /^[a-f0-9]{64}$/.test(data.tokenHash))
+        await rate("mail-identity:" + data.tokenHash, 60, 3600);
+      const { status, brand } = await tx(db => syncMailBrand(db, data, config.brandSyncStoreIds));
+      return reply(status, brand ? { brand } : { error: "Identitas belum disinkronkan." });
+    }
     // Operator-only control plane; the public proxy must also block /internal/*.
     if (route === "/internal/mail-registry" && req.method === "POST") {
       if (!config.mailEnabled || !controlAuthorized(req.headers.authorization, config.mailControlSecret))
         reject(401, "Otorisasi tidak valid.");
-      const tenant = await lookupMailTenant(pool, data.tokenHash);
+      const tenant = await lookupMailTenant(pool, data.tokenHash, config.brandSyncStoreIds);
       return reply(tenant ? 200 : 404, tenant || { error: "Tenant tidak tersedia." });
     }
     if (route === "/health" && req.method === "GET") {
@@ -184,8 +200,15 @@ export function createApp({ pool, config, sendMail, checkDns = checkStoreDns }) 
       return reply(200, {
         ok: true,
         otpConfigured: Boolean(config.resendKey),
-        installerEnabled: config.releases.length > 0,
+        installerEnabled: Boolean(config.installerLatest || config.releases.length),
       });
+    }
+    if (route === "/store-releases" && req.method === "GET") {
+      try {
+        return reply(200, await storeReleases(config.storeCatalog, config.storeCatalogTrust));
+      } catch {
+        return reply(503, { error: "Daftar rilis terverifikasi belum tersedia." });
+      }
     }
     if (
       req.method === "POST" &&
@@ -263,7 +286,7 @@ export function createApp({ pool, config, sendMail, checkDns = checkStoreDns }) 
           [randomUUID(), otp.email, CONSENT],
         );
         await db.query(
-          "INSERT INTO sessions(digest,seller_id,expires_at) VALUES($1,$2,now()+interval '12 hours')",
+          "INSERT INTO sessions(digest,seller_id,expires_at,authenticated_at) VALUES($1,$2,now()+interval '12 hours',now())",
           [digest(raw), user.id],
         );
         return true;
@@ -287,7 +310,7 @@ export function createApp({ pool, config, sendMail, checkDns = checkStoreDns }) 
         if (!candidate) reject(410, "Token pairing kedaluwarsa.");
         // Match issuance lock order: store first, then token.
         const { rows: [store] } = await db.query(
-          `SELECT s.id, s.domain, host(s.vps_ipv4) AS vps_ipv4, u.email FROM stores s JOIN sellers u ON u.id=s.seller_id
+          `SELECT s.id, s.domain, s.installation_generation, host(s.vps_ipv4) AS vps_ipv4, u.email FROM stores s JOIN sellers u ON u.id=s.seller_id
            WHERE s.id=$1 FOR UPDATE OF s`, [candidate.store_id],
         );
         if (!store || !canSignIn(store.email))
@@ -298,7 +321,7 @@ export function createApp({ pool, config, sendMail, checkDns = checkStoreDns }) 
           "SELECT * FROM pairings WHERE digest=$1 FOR UPDATE",
           [tokenDigest],
         );
-        if (!pair || pair.expires_at < new Date())
+        if (!pair)
           reject(410, "Token pairing kedaluwarsa.");
         if (data.existingDomain !== undefined && data.existingDomain !== store.domain)
           reject(409, "VPS masih menjalankan toko dengan domain lain. Daftarkan domain toko yang sama untuk menyambungkannya kembali.");
@@ -312,13 +335,15 @@ export function createApp({ pool, config, sendMail, checkDns = checkStoreDns }) 
           if (!existing) reject(409, "Token pairing telah dipakai.");
           return { agentId: existing.id, passwordFromWizard: Boolean(store.vps_ipv4) };
         }
+        if (pair.expires_at < new Date())
+          reject(410, "Token pairing kedaluwarsa.");
         if (store.vps_ipv4 && data.protocol !== 2)
           reject(409, "Unduh ulang perintah bootstrap terbaru dari wizard.");
         if (store.vps_ipv4 && data.ipv4 !== store.vps_ipv4)
           reject(409, "IP VPS ini tidak sama dengan IP di Info Toko. Pairing belum dilakukan.");
         const {
           rows: [existing],
-        } = await db.query("SELECT id FROM agents WHERE store_id=$1", [
+        } = await db.query("SELECT id FROM agents WHERE store_id=$1 AND retired_at IS NULL", [
           store.id,
         ]);
         if (existing)
@@ -326,12 +351,12 @@ export function createApp({ pool, config, sendMail, checkDns = checkStoreDns }) 
             409,
             "Toko sudah memiliki agent. Pemulihan memerlukan operator.",
           );
-        const release = config.releases[0];
+        const release = pair.release || config.releases[0];
         if (!release) reject(503, "Rilis installer belum disetujui.");
         const id = randomUUID();
         await db.query(
-          "INSERT INTO agents(id,store_id,digest) VALUES($1,$2,$3)",
-          [id, store.id, digest(data.credential)],
+          "INSERT INTO agents(id,store_id,digest,public_ip,generation) VALUES($1,$2,$3,$4,$5)",
+          [id, store.id, digest(data.credential), isIP(data.ipv4 || "") === 4 ? data.ipv4 : null, store.installation_generation],
         );
         await db.query(
           "UPDATE pairings SET consumed_at=now(),agent_id=$1 WHERE digest=$2",
@@ -347,6 +372,13 @@ export function createApp({ pool, config, sendMail, checkDns = checkStoreDns }) 
     }
     if (route.startsWith("/agent/")) {
       const a = await agent(req);
+      if (route === "/agent/observation" && req.method === "POST") {
+        const observation = agentObservation(data, reject);
+        const result = await pool.query(`UPDATE agents SET observation=$2,observed_at=now()
+          WHERE id=$1 AND revoked_at IS NULL AND retired_at IS NULL`, [a.id, observation]);
+        if (!result.rowCount) reject(401, "Agent tidak aktif.");
+        return reply(200, { ok: true });
+      }
       if (route === "/agent/mail" && req.method === "POST") {
         if (!config.mailEnabled) reject(503, "Aktivasi email belum tersedia.");
         await rate("agent-mail:" + a.id, 120, 3600);
@@ -372,7 +404,7 @@ export function createApp({ pool, config, sendMail, checkDns = checkStoreDns }) 
         const {
           rows: [job],
         } = await pool.query(
-          `UPDATE jobs SET lease_until=now()+interval '90 seconds' WHERE agent_id=$1 RETURNING *`,
+          `UPDATE jobs SET lease_until=now()+interval '90 seconds' WHERE agent_id=$1 AND retired_at IS NULL RETURNING *`,
           [a.id],
         );
         const {
@@ -419,10 +451,13 @@ export function createApp({ pool, config, sendMail, checkDns = checkStoreDns }) 
           )
             evidence[key] = e[key];
         const result = await tx(async (db) => {
+          await db.query("SELECT id FROM stores WHERE id=$1 FOR UPDATE", [a.store_id]);
+          const active = await db.query("SELECT id FROM agents WHERE id=$1 AND revoked_at IS NULL AND retired_at IS NULL", [a.id]);
+          if (!active.rowCount) reject(401, "Agent tidak aktif.");
           const {
             rows: [job],
           } = await db.query(
-            "SELECT * FROM jobs WHERE agent_id=$1 FOR UPDATE",
+            "SELECT * FROM jobs WHERE agent_id=$1 AND retired_at IS NULL FOR UPDATE",
             [a.id],
           );
           if (!job || data.jobId !== job.id)
@@ -465,6 +500,7 @@ export function createApp({ pool, config, sendMail, checkDns = checkStoreDns }) 
       reject(404, "Endpoint tidak ditemukan.");
     }
     const user = await seller(req);
+    if (route.startsWith("/ops/")) return operations(route, req, url, data, user, reply);
     if (route === "/store/mail" && req.method === "GET") {
       const { rows: [mail] } = await pool.query(`SELECT t.origin,t.brand,t.seller_emails,t.generation,t.enabled,t.verified_at
         FROM mail_tenants t JOIN stores s ON s.id=t.store_id WHERE s.seller_id=$1`, [user.id]);
@@ -514,7 +550,7 @@ export function createApp({ pool, config, sendMail, checkDns = checkStoreDns }) 
       return reply(200, result);
     }
     if (route === "/session" && req.method === "GET")
-      return reply(200, { seller: user, consent: CONSENT });
+      return reply(200, { seller: user, consent: CONSENT, onePaste: true });
     if (route === "/logout" && req.method === "POST") {
       const raw =
         (req.headers.cookie || "")
@@ -558,12 +594,14 @@ export function createApp({ pool, config, sendMail, checkDns = checkStoreDns }) 
         const {
           rows: [existing],
         } = await db.query(
-          "SELECT id FROM stores WHERE seller_id=$1 FOR UPDATE",
+          "SELECT id,domain,installation_generation FROM stores WHERE seller_id=$1 FOR UPDATE",
           [user.id],
         );
         if (existing) {
+          if (existing.installation_generation > 1 && existing.domain !== d)
+            reject(409, "Gunakan domain toko yang sama untuk instalasi ulang.");
           const { rowCount } = await db.query(
-            "SELECT id FROM agents WHERE store_id=$1",
+            "SELECT id FROM agents WHERE store_id=$1 AND retired_at IS NULL",
             [existing.id],
           );
           if (rowCount)
@@ -592,13 +630,13 @@ export function createApp({ pool, config, sendMail, checkDns = checkStoreDns }) 
       const {
         rows: [job],
       } = await pool.query(
-        "SELECT id,state,stage,sequence,evidence,updated_at,lease_until,release FROM jobs WHERE store_id=$1",
+        "SELECT id,state,stage,sequence,evidence,updated_at,lease_until,release FROM jobs WHERE store_id=$1 AND retired_at IS NULL",
         [store.id],
       );
       const {
         rows: [a],
       } = await pool.query(
-        "SELECT id,last_seen,revoked_at FROM agents WHERE store_id=$1",
+        "SELECT id,last_seen,revoked_at FROM agents WHERE store_id=$1 AND retired_at IS NULL",
         [store.id],
       );
       if (job) {
@@ -612,11 +650,22 @@ export function createApp({ pool, config, sendMail, checkDns = checkStoreDns }) 
     }
     if (route === "/pairing" && req.method === "POST") {
       await rate("pairing-seller:" + user.id, 10, 3600);
-      if (!config.releases.length)
-        reject(
-          503,
-          "Installer belum dibuka: operator perlu menetapkan rilis yang disetujui.",
-        );
+      const currentStore = await pool.query("SELECT s.id FROM stores s WHERE s.seller_id=$1 AND s.vps_ipv4 IS NOT NULL AND s.admin_password_sealed IS NOT NULL AND NOT EXISTS(SELECT 1 FROM agents a WHERE a.store_id=s.id AND a.retired_at IS NULL)", [user.id]);
+      if (!currentStore.rowCount) reject(422, "Lengkapi Info Toko atau periksa instalasi yang sudah terhubung.");
+      let release;
+      try { release = config.installerLatest ? await resolveInstallerRelease() : config.releases[0]; }
+      catch { reject(503, "Versi stabil terbaru belum dapat diverifikasi. Coba lagi sebentar; installer tidak memakai versi lama."); }
+      if (!release) reject(503, "Rilis installer belum tersedia.");
+      if (config.installerLatest && !config.local) {
+        let approved;
+        try {
+          const signed = await storeReleases(config.storeCatalog, config.storeCatalogTrust);
+          const catalog = JSON.parse(Buffer.from(signed.payload, "base64").toString("utf8"));
+          approved = !catalog.revoked.includes(release.sha) && catalog.releases.find(item => item.channel === "stable" &&
+            "v" + item.version === release.version && item.sha === release.sha && item.digest === release.asset?.digest);
+        } catch { /* Fail closed while the operator publisher is unavailable. */ }
+        if (!approved) reject(503, "Versi terbaru sedang diverifikasi untuk instalasi. Coba lagi sebentar; versi lama tidak dipasang.");
+      }
       const raw = token();
       await tx(async (db) => {
         const {
@@ -630,7 +679,7 @@ export function createApp({ pool, config, sendMail, checkDns = checkStoreDns }) 
           reject(422, "Lengkapi DNS dan password dashboard di Info Toko.");
         if (
           (
-            await db.query("SELECT id FROM agents WHERE store_id=$1", [
+            await db.query("SELECT id FROM agents WHERE store_id=$1 AND retired_at IS NULL", [
               store.id,
             ])
           ).rowCount
@@ -643,16 +692,24 @@ export function createApp({ pool, config, sendMail, checkDns = checkStoreDns }) 
           [store.id],
         );
         await db.query(
-          "INSERT INTO pairings(digest,store_id,expires_at) VALUES($1,$2,now()+interval '15 minutes')",
-          [digest(raw), store.id],
+          "INSERT INTO pairings(digest,store_id,expires_at,release) VALUES($1,$2,now()+interval '15 minutes',$3)",
+          [digest(raw), store.id, release],
         );
       });
-      return reply(200, {
+      // Legacy clients must opt in explicitly; the public wizard defaults to stdin.
+      if (data.installer === "legacy") return reply(200, {
+        release: { version: release.version, sha: release.sha },
         token: raw,
         expiresIn: 900,
         command: `(bootstrap=$(mktemp) && trap 'rm -f -- "$bootstrap"' EXIT && curl --proto '=https' --tlsv1.2 -fsS ${config.origin}/bootstrap.sh -o "$bootstrap" && sudo bash "$bootstrap")`,
+        instruction: "Tempel token saat terminal meminta token pairing.",
+      });
+      return reply(200, {
+        release: { version: release.version, sha: release.sha },
+        expiresIn: 900,
+        command: `(bootstrap=$(mktemp) && trap 'rm -f -- "$bootstrap"' EXIT && curl --proto '=https' --tlsv1.2 -fsS ${config.origin}/bootstrap.sh -o "$bootstrap" && sudo bash "$bootstrap" --enroll <<'BTOS_ENROLLMENT'\n${raw}\nBTOS_ENROLLMENT\n)`,
         instruction:
-          "Saat diminta, tempel token pairing di terminal VPS. Token tidak dimasukkan dalam perintah atau riwayat shell.",
+          "Tempel seluruh blok sekali di VPS. Perintah bersifat pribadi, berlaku 15 menit, dan tidak perlu dibagikan.",
       });
     }
     if (route === "/revoke" && req.method === "POST") {
@@ -672,7 +729,7 @@ export function createApp({ pool, config, sendMail, checkDns = checkStoreDns }) 
     }
     if (route === "/retry" && req.method === "POST") {
       await pool.query(
-        `UPDATE jobs SET state='queued',updated_at=now() WHERE store_id IN (SELECT id FROM stores WHERE seller_id=$1) AND state IN ('failed','waiting_dns')`,
+        `UPDATE jobs SET state='queued',updated_at=now() WHERE store_id IN (SELECT id FROM stores WHERE seller_id=$1) AND retired_at IS NULL AND state IN ('failed','waiting_dns')`,
         [user.id],
       );
       return reply(200, { ok: true });
@@ -727,7 +784,7 @@ export function createApp({ pool, config, sendMail, checkDns = checkStoreDns }) 
         reject(405, "Metode tidak didukung.");
       const decoded = decodeURIComponent(url.pathname);
       if (decoded === "/bootstrap.sh") {
-        if (!config.releases.length)
+        if (!config.installerLatest && !config.releases.length)
           reject(503, "Rilis installer belum disetujui.");
         const agent = await readFile(path.join(ROOT, "agent/agent.py"));
         const script = (
@@ -742,7 +799,7 @@ export function createApp({ pool, config, sendMail, checkDns = checkStoreDns }) 
         return res.end(script);
       }
       if (decoded === "/agent.py") {
-        if (!config.releases.length)
+        if (!config.installerLatest && !config.releases.length)
           reject(503, "Rilis installer belum disetujui.");
         res.writeHead(200, {
           "Content-Type": "text/plain",
@@ -751,7 +808,7 @@ export function createApp({ pool, config, sendMail, checkDns = checkStoreDns }) 
         return res.end(await readFile(path.join(ROOT, "agent/agent.py")));
       }
       if (
-        !/^\/(?:$|index\.html$|404\.html$|portal-config\.json$|assets\/|pendaftaran(?:\/|$)|masuk(?:\/|$)|daftar(?:\/|$)|panduan-instalasi(?:\/|$)|persiapan-toko(?:\/|$)|kebijakan-privasi(?:\/|$))/.test(
+        !/^\/(?:$|index\.html$|404\.html$|portal-config\.json$|assets\/|admin(?:\/|$)|pendaftaran(?:\/|$)|masuk(?:\/|$)|daftar(?:\/|$)|panduan-instalasi(?:\/|$)|persiapan-toko(?:\/|$)|kebijakan-privasi(?:\/|$))/.test(
           decoded,
         ) ||
         decoded.split("/").some((p) => p === ".." || p.startsWith("."))

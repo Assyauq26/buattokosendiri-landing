@@ -34,12 +34,25 @@ fi
 if [[ -f /etc/single-store/Caddyfile ]]; then sha256sum /etc/single-store/Caddyfile > "$backup/hubify-routing.sha256"; fi
 python3 "$source_dir/deploy/init-production.py"
 export PLATFORM_SHA="$sha"
-dc() { docker compose -f "$source_dir/deploy/compose.yaml" "$@"; }
+# Keep the separately reviewed read-only catalog mount. Refuse other runtime
+# overlays rather than silently discarding a service's active configuration.
+overlay=()
+if docker inspect btos-platform-app-1 >/dev/null 2>&1; then
+  active_files=$(docker inspect -f '{{index .Config.Labels "com.docker.compose.project.config_files"}}' btos-platform-app-1)
+  [[ $active_files == "$old/deploy/compose.yaml" || $active_files == "$old/deploy/compose.yaml,/etc/btos-platform/catalog-compose.json" ]] || { echo 'Unreviewed platform overlays; operator review required'; exit 1; }
+  if [[ $active_files == *,/etc/btos-platform/catalog-compose.json ]]; then
+    [[ -f /etc/btos-platform/catalog-compose.json && ! -L /etc/btos-platform/catalog-compose.json ]] || exit 1
+    [[ $(stat -c %u /etc/btos-platform/catalog-compose.json) == 0 ]] || exit 1
+    [[ $(( 8#$(stat -c %a /etc/btos-platform/catalog-compose.json) & 8#022 )) == 0 ]] || exit 1
+    overlay=(-f /etc/btos-platform/catalog-compose.json)
+  fi
+fi
+dc() { docker compose -f "$source_dir/deploy/compose.yaml" "${overlay[@]}" "$@"; }
 rollback() {
   code=$?
   if [[ -n $old_sha ]]; then
     export PLATFORM_SHA="$old_sha"
-    docker compose -f "$old/deploy/compose.yaml" up -d --no-build app
+    docker compose -f "$old/deploy/compose.yaml" "${overlay[@]}" up -d --no-build app
   else
     dc stop app || true
   fi

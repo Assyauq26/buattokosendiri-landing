@@ -124,7 +124,6 @@
       });
       $("admin-password").value = "";
       $("admin-password-confirmation").value = "";
-      $("pair-token").value = "";
       $("command").value = "";
       $("pairing").hidden = true;
       editing = false;
@@ -136,17 +135,19 @@
     panel(2);
   });
   bind("pair", async () => {
-    const r = await api("/pairing", {});
+    $("command").value = "";
+    $("installer-version").textContent = "";
+    $("pairing").hidden = true;
+    const r = await api("/pairing", { installer: "stdin" });
     $("command").value = r.command;
-    $("pair-token").value = r.token;
+    $("installer-version").textContent = r.release?.version ? "Versi " + r.release.version + " siap dipasang." : "";
     $("pairing").hidden = false;
     message(
-      "Token aktif selama 15 menit. Jalankan perintah di VPS Anda.",
+      r.instruction,
     );
   });
   for (const [id, input] of [
     ["copy-command", "command"],
-    ["copy-token", "pair-token"],
   ])
     bind(id, async () => {
       try {
@@ -175,6 +176,7 @@
   bind("logout", async () => {
     await api("/logout", {});
     authenticated = false;
+    $("command").value = "";
     current = null;
     location.reload();
   });
@@ -222,7 +224,7 @@
       if (!editing) panel(3);
       return;
     }
-    $("pair-token").value = "";
+    $("command").value = "";
     $("pairing").hidden = true;
     message("");
     const j = r.job;
