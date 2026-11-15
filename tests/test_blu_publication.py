@@ -16,7 +16,7 @@ def envelope(p):return {'payload':base64.b64encode(json.dumps(p).encode()).decod
 
 class BluPublication(unittest.TestCase):
     def test_other_migrations_are_not_approved(self):
-        with self.assertRaisesRegex(ValueError,'unreviewed_migration_release'):module.approved_modules('v1.8.3')
+        with self.assertRaisesRegex(ValueError,'unreviewed_migration_release'):module.approved_modules('v1.8.4')
     def test_blu_target_cohort_global_sequence_and_refresh(self):
         with tempfile.TemporaryDirectory() as folder:
             root=Path(folder);(root/'trust.json').write_text('{}')

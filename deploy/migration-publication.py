@@ -1,4 +1,4 @@
-"""Operator publication for two separately reviewed canonical migration paths.
+"""Operator publication for three separately reviewed canonical migration paths.
 
 The root-owned approval pins a separate worker checkout and a cohort. The app
 cannot enable this path. Keys stay in the existing networkless signer container.
@@ -14,11 +14,13 @@ import sys
 
 APPROVAL = Path('/etc/btos-platform/updater-publication.json')
 BLU_APPROVAL = Path('/etc/btos-platform/updater-publications/v1.8.2.json')
+PAYMENTS_APPROVAL = Path('/etc/btos-platform/updater-publications/v1.8.3.json')
 
 
 def approved_modules(version='v1.8.0'):
-    if version not in ('v1.8.0','v1.8.2'):raise ValueError('unreviewed_migration_release')
-    approval=APPROVAL if version=='v1.8.0' else BLU_APPROVAL
+    approvals={'v1.8.0':APPROVAL,'v1.8.2':BLU_APPROVAL,'v1.8.3':PAYMENTS_APPROVAL}
+    if version not in approvals:raise ValueError('unreviewed_migration_release')
+    approval=approvals[version]
     for p in (approval, *approval.parents):
         s = p.lstat()
         if p.is_symlink() or s.st_uid != 0 or s.st_mode & 0o022:
@@ -49,13 +51,13 @@ def approved_modules(version='v1.8.0'):
     cohort = cfg['installations']
     if (not isinstance(cohort,list) or not 1 <= len(cohort) <= 1000 or len(set(cohort)) != len(cohort)
             or (cohort!=['*'] and any(not re.fullmatch('[a-f0-9]{32}', i) for i in cohort))
-            or (cohort==['*'] and (version!='v1.8.2' or cfg.get('generalEligibilityReviewed') is not True))
+            or (cohort==['*'] and (version not in ('v1.8.2','v1.8.3') or cfg.get('generalEligibilityReviewed') is not True))
             or cfg['channel'] not in ('pilot','stable')):
         raise ValueError('publication_cohort')
     sys.path.insert(0, str(source/'installer'))
-    if version=='v1.8.2' and (cfg.get('targetSha')!=sha or not re.fullmatch('[a-f0-9]{64}',cfg.get('artifactDigest',''))):
+    if version in ('v1.8.2','v1.8.3') and (cfg.get('targetSha')!=sha or not re.fullmatch('[a-f0-9]{64}',cfg.get('artifactDigest',''))):
         raise ValueError('publication_target')
-    operator = importlib.import_module('update_service.policy_operator' if version=='v1.8.0' else 'update_service.blu_policy_operator')
+    operator = importlib.import_module({'v1.8.0':'update_service.policy_operator','v1.8.2':'update_service.blu_policy_operator','v1.8.3':'update_service.payment_live_policy_operator'}[version])
     auth = importlib.import_module('update_service.upgrade_policy').authenticate
     return cfg, operator, auth
 
@@ -63,10 +65,11 @@ def approved_modules(version='v1.8.0'):
 def migration_entry(package, release, previous, catalog, source, image, container, run, now):
     cfg, operator, authenticate = approved_modules(release['version'])
     blu=release['version']=='v1.8.2'
-    target_sha=cfg['targetSha'] if blu else operator.TARGET_SHA
-    target_digest=cfg['artifactDigest'] if blu else operator.TARGET_DIGEST
-    target_version='1.8.2' if blu else '1.8.0'
-    from_version='1.8.1' if blu else '1.7.4'
+    payments=release['version']=='v1.8.3'
+    target_sha=cfg['targetSha'] if blu or payments else operator.TARGET_SHA
+    target_digest=cfg['artifactDigest'] if blu or payments else operator.TARGET_DIGEST
+    target_version='1.8.3' if payments else '1.8.2' if blu else '1.8.0'
+    from_version='1.8.2' if payments else '1.8.1' if blu else '1.7.4'
     if (release['version'], release['sha'], release['asset']['digest']) != (
             'v'+target_version, target_sha, target_digest):
         raise ValueError('unreviewed_migration_release')
@@ -90,7 +93,7 @@ def migration_entry(package, release, previous, catalog, source, image, containe
         highest=max(highest,historical['sequence'])
     sequence=highest+1
     policy = (operator.prepare(cfg['baselineArchive'],package,target_sha,target_digest,cfg['installations'],sequence,now=now)
-        if blu else operator.prepare(cfg['baselineArchive'], package, cfg['installations'], sequence, now=now))
+        if blu or payments else operator.prepare(cfg['baselineArchive'], package, cfg['installations'], sequence, now=now))
     if prior_policy:
         retained = {**prior_policy, 'sequence':sequence, 'issuedAt':now, 'expiresAt':now+86400}
         if retained == policy and prior_policy['sequence']>=highest and prior_policy['expiresAt'] > now+6*3600:
@@ -111,5 +114,5 @@ def migration_entry(package, release, previous, catalog, source, image, containe
     return {**release['asset'], 'version':target_version,'sha':target_sha,
         'channel':cfg['channel'],'minimumUpdater':3,'dbContract':1,'rollbackCompatible':False,
         'minimumInstalledVersion':from_version,'maximumInstalledVersion':from_version,
-        'notes':('Checkout blu berkode unik, pembacaan Gmail dan pemeriksaan seller. Memerlukan revisi worker blu resmi serta baseline1.8.1 terverifikasi; Google client dan aktivasi dilakukan per toko. GoPay belum tersedia.' if blu else 'Promosi Flash Sale dan voucher. Memerlukan worker v3 dan baseline 1.7.4 terverifikasi; backup serta migrasi diperiksa sebelum aktivasi.'),
+        'notes':('Konfirmasi blu otomatis dan QRIS GoPay Merchant dengan OTP, unggah QRIS, nominal unik dan worker backend. Integrasi GoPay tidak resmi; koneksi serta aktivasi dilakukan per toko. Memerlukan revisi worker pembayaran resmi dan baseline1.8.2 terverifikasi.' if payments else 'Checkout blu berkode unik, pembacaan Gmail dan pemeriksaan seller. Memerlukan revisi worker blu resmi serta baseline1.8.1 terverifikasi; Google client dan aktivasi dilakukan per toko. GoPay belum tersedia.' if blu else 'Promosi Flash Sale dan voucher. Memerlukan worker v3 dan baseline 1.7.4 terverifikasi; backup serta migrasi diperiksa sebelum aktivasi.'),
         'upgradePolicy':envelope}, policy['expiresAt']
