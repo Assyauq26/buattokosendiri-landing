@@ -23,6 +23,9 @@ REQUIRED = {'VERSION', 'app/Dockerfile', 'deploy/compose.yaml', 'installer/core.
             'installer/update_service/new_install.py', 'installer/update_service/bootstrap.py',
             'installer/update_service/server.py', 'deploy/updater-trust.json',
             'deploy/single-store-updater.service', 'installer/update_service/__init__.py', 'release-policy.json'}
+# Operator-only helper continuation. Reuse the reviewed discovery/signing runtime
+# without deploying/rebuilding the central web app or granting it key access.
+OPERATOR_RUNTIME = 'sha256:4a71f979828b184a29af6b8cd91870f5c73aa11f84463c3c92f4c2c3aca01a0d'
 
 
 def validate_package(path, release, *, migration=False):
@@ -105,7 +108,9 @@ def main():
         sha = run(['git', '-C', source, 'rev-parse', 'HEAD'])
         if not re.fullmatch('[a-f0-9]{40}', sha):
             raise ValueError('source_identity')
-        image = 'btos-platform:' + sha
+        image = OPERATOR_RUNTIME
+        if run(['docker','image','inspect','--format','{{.Id}}',image])!=image:
+            raise ValueError('operator_runtime_changed')
         # Reviewed immutable image; no runtime environment or application secret.
         container = ['docker', 'run', '--rm', '--read-only', '--cap-drop', 'ALL', '--security-opt',
                      'no-new-privileges', '--memory', '128m', '--pids-limit', '32']

@@ -1,4 +1,4 @@
-"""Operator publication for the reviewed canonical 1.7.4 -> 1.8.0 path only.
+"""Operator publication for two separately reviewed canonical migration paths.
 
 The root-owned approval pins a separate worker checkout and a cohort. The app
 cannot enable this path. Keys stay in the existing networkless signer container.
@@ -13,14 +13,17 @@ import subprocess
 import sys
 
 APPROVAL = Path('/etc/btos-platform/updater-publication.json')
+BLU_APPROVAL = Path('/etc/btos-platform/updater-publications/v1.8.2.json')
 
 
-def approved_modules():
-    for p in (APPROVAL, *APPROVAL.parents):
+def approved_modules(version='v1.8.0'):
+    if version not in ('v1.8.0','v1.8.2'):raise ValueError('unreviewed_migration_release')
+    approval=APPROVAL if version=='v1.8.0' else BLU_APPROVAL
+    for p in (approval, *approval.parents):
         s = p.lstat()
         if p.is_symlink() or s.st_uid != 0 or s.st_mode & 0o022:
             raise ValueError('publication_approval_permissions')
-    cfg = json.loads(APPROVAL.read_text())
+    cfg = json.loads(approval.read_text())
     source = Path(cfg['source'])
     sha = cfg['sha']
     if not source.is_absolute() or not re.fullmatch('[a-f0-9]{40}', sha):
@@ -45,22 +48,30 @@ def approved_modules():
             raise ValueError('publication_source_bytes')
     cohort = cfg['installations']
     if (not isinstance(cohort,list) or not 1 <= len(cohort) <= 1000 or len(set(cohort)) != len(cohort)
-            or any(not re.fullmatch('[a-f0-9]{32}', i) for i in cohort)
+            or (cohort!=['*'] and any(not re.fullmatch('[a-f0-9]{32}', i) for i in cohort))
+            or (cohort==['*'] and (version!='v1.8.2' or cfg.get('generalEligibilityReviewed') is not True))
             or cfg['channel'] not in ('pilot','stable')):
         raise ValueError('publication_cohort')
     sys.path.insert(0, str(source/'installer'))
-    operator = importlib.import_module('update_service.policy_operator')
+    if version=='v1.8.2' and (cfg.get('targetSha')!=sha or not re.fullmatch('[a-f0-9]{64}',cfg.get('artifactDigest',''))):
+        raise ValueError('publication_target')
+    operator = importlib.import_module('update_service.policy_operator' if version=='v1.8.0' else 'update_service.blu_policy_operator')
     auth = importlib.import_module('update_service.upgrade_policy').authenticate
     return cfg, operator, auth
 
 
 def migration_entry(package, release, previous, catalog, source, image, container, run, now):
-    cfg, operator, authenticate = approved_modules()
+    cfg, operator, authenticate = approved_modules(release['version'])
+    blu=release['version']=='v1.8.2'
+    target_sha=cfg['targetSha'] if blu else operator.TARGET_SHA
+    target_digest=cfg['artifactDigest'] if blu else operator.TARGET_DIGEST
+    target_version='1.8.2' if blu else '1.8.0'
+    from_version='1.8.1' if blu else '1.7.4'
     if (release['version'], release['sha'], release['asset']['digest']) != (
-            'v1.8.0', operator.TARGET_SHA, operator.TARGET_DIGEST):
+            'v'+target_version, target_sha, target_digest):
         raise ValueError('unreviewed_migration_release')
     roots = json.loads((catalog/'trust.json').read_text())
-    prior = next((r for r in previous['releases'] if r['version']=='1.8.0'), None)
+    prior = next((r for r in previous['releases'] if r['version']==target_version), None)
     prior_policy = None
     if prior:
         # History authentication is permitted after expiry; issuedAt is used only
@@ -69,11 +80,20 @@ def migration_entry(package, release, previous, catalog, source, image, containe
         import base64
         stamp = json.loads(base64.b64decode(envelope['payload']))['issuedAt']
         prior_policy, _ = authenticate(json.dumps(envelope).encode(), roots, now=stamp)
-    sequence = prior_policy['sequence']+1 if prior_policy else 1
-    policy = operator.prepare(cfg['baselineArchive'], package, cfg['installations'], sequence, now=now)
+    # Worker replay protection is global across policy IDs, not per release.
+    import base64
+    highest=prior_policy['sequence'] if prior_policy else 0
+    for item in previous['releases']:
+        if not item.get('upgradePolicy'):continue
+        envelope=item['upgradePolicy'];stamp=json.loads(base64.b64decode(envelope['payload']))['issuedAt']
+        historical,_=authenticate(json.dumps(envelope).encode(),roots,now=stamp)
+        highest=max(highest,historical['sequence'])
+    sequence=highest+1
+    policy = (operator.prepare(cfg['baselineArchive'],package,target_sha,target_digest,cfg['installations'],sequence,now=now)
+        if blu else operator.prepare(cfg['baselineArchive'], package, cfg['installations'], sequence, now=now))
     if prior_policy:
         retained = {**prior_policy, 'sequence':sequence, 'issuedAt':now, 'expiresAt':now+86400}
-        if retained == policy and prior_policy['expiresAt'] > now+6*3600:
+        if retained == policy and prior_policy['sequence']>=highest and prior_policy['expiresAt'] > now+6*3600:
             policy = prior_policy
     if not prior_policy or policy != prior_policy:
         (catalog/'policy-input.json').write_text(json.dumps(policy))
@@ -88,8 +108,8 @@ def migration_entry(package, release, previous, catalog, source, image, containe
         if verified != policy: raise ValueError('signed_policy_identity')
     else:
         envelope = prior['upgradePolicy']
-    return {**release['asset'], 'version':'1.8.0','sha':operator.TARGET_SHA,
+    return {**release['asset'], 'version':target_version,'sha':target_sha,
         'channel':cfg['channel'],'minimumUpdater':3,'dbContract':1,'rollbackCompatible':False,
-        'minimumInstalledVersion':'1.7.4','maximumInstalledVersion':'1.7.4',
-        'notes':'Promosi Flash Sale dan voucher. Memerlukan worker v3 dan baseline 1.7.4 terverifikasi; backup serta migrasi diperiksa sebelum aktivasi.',
+        'minimumInstalledVersion':from_version,'maximumInstalledVersion':from_version,
+        'notes':('Checkout blu berkode unik, pembacaan Gmail dan pemeriksaan seller. Memerlukan revisi worker blu resmi serta baseline1.8.1 terverifikasi; Google client dan aktivasi dilakukan per toko. GoPay belum tersedia.' if blu else 'Promosi Flash Sale dan voucher. Memerlukan worker v3 dan baseline 1.7.4 terverifikasi; backup serta migrasi diperiksa sebelum aktivasi.'),
         'upgradePolicy':envelope}, policy['expiresAt']
