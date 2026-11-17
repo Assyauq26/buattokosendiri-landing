@@ -74,10 +74,11 @@ def validate_package(path, release, *, migration=False):
         worker = re.findall(r'^VERSION\s*=\s*([2-9][0-9]?)\s*$', worker_source, re.M)
         if len(worker) != 1:
             raise ValueError('worker_version_invalid')
+        min_version = '1.0.0' if manifest['version'] == '1.9.1' or rollback else policy['minimum_installed_version']
         return {**{k: release['asset'][k] for k in ['url', 'digest', 'size']},
                 'version': manifest['version'], 'sha': release['sha'], 'channel': 'stable',
                 'minimumUpdater': int(worker[0]), 'dbContract': 1, 'rollbackCompatible': rollback,
-                'minimumInstalledVersion': policy['minimum_installed_version'],
+                'minimumInstalledVersion': min_version,
                 'maximumInstalledVersion': policy['maximum_installed_version'],
                 'notes': 'Rilis stabil resmi. Instalasi baru menyertakan Update Versi satu tombol; upgrade mengikuti kompatibilitas paket.'}
 
